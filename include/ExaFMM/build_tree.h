@@ -15,11 +15,11 @@
 #include <queue>
 #include <unordered_map>
 
-#include "exafmm_t.h"
+#include "exafmm.h"
 #include "fmm_base.h"
 #include "hilbert.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
 using std::max;
 /**
  * @brief Get bounding box of sources and targets.
@@ -214,5 +214,5 @@ Nodes<T> build_tree(Bodies<T>& sources, Bodies<T>& targets, NodePtrs<T>& leafs,
   fmm.depth = depth;
   return nodes;
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_BUILDTREE_H_

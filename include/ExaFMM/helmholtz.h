@@ -11,13 +11,13 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_HELMHOLTZ_H_
 #define INCLUDE_EXAFMM_HELMHOLTZ_H_
-#include "exafmm_t.h"
+#include "exafmm.h"
 #include "fmm.h"
 #include "geometry.h"
 #include "intrinsics.h"
 #include "timer.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
 //! A derived FMM class for Helmholtz kernel.
 class HelmholtzFmm : public Fmm<complex_t> {
  public:
@@ -230,5 +230,5 @@ class HelmholtzFmm : public Fmm<complex_t> {
     }
   }
 };
-}  // end namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_HELMHOLTZ_H_

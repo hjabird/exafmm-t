@@ -11,13 +11,13 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_LAPLACE_H_
 #define INCLUDE_EXAFMM_LAPLACE_H_
-#include "exafmm_t.h"
+#include "exafmm.h"
 #include "fmm_scale_invariant.h"
 #include "geometry.h"
 #include "intrinsics.h"
 #include "timer.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
 //! A derived FMM class for Laplace kernel.
 class LaplaceFmm : public FmmScaleInvariant<real_t> {
  public:
@@ -181,5 +181,5 @@ class LaplaceFmm : public FmmScaleInvariant<real_t> {
     add_flop((long long)ntrgs * (long long)nsrcs * (20 + 4 * 2));
   }
 };
-}  // end namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_LAPLACE_H_

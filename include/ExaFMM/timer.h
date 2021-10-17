@@ -11,6 +11,7 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_TIMER_H_
 #define INCLUDE_EXAFMM_TIMER_H_
+
 #include <atomic>
 #include <chrono>
 #include <iomanip>
@@ -18,7 +19,8 @@
 #include <map>
 #include <string>
 
-namespace exafmm_t {
+namespace ExaFMM {
+
 static const int stringLength = 20;  //!< Length of formatted string
 static const int decimal = 7;        //!< Decimal precision
 static const int wait =
@@ -83,5 +85,5 @@ std::chrono::duration<double> stop(std::string event, bool verbose = true) {
   if (verbose) print(event, eventTime);
   return eventTime;
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_TIMER_H_

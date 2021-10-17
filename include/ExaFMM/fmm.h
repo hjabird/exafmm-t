@@ -19,7 +19,8 @@
 #include "intrinsics.h"
 #include "math_wrapper.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
+
 template <typename T>
 class Fmm : public FmmBase<T> {
  public:
@@ -889,5 +890,5 @@ void Fmm<complex_t>::ifft_dn_check(std::vector<size_t>& ifft_offset,
   }
   fft_destroy_plan(plan);
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_FMM_H_

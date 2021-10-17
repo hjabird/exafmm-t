@@ -14,11 +14,11 @@
 
 #include <algorithm>  // std::fill
 
-#include "exafmm_t.h"
+#include "exafmm.h"
 #include "geometry.h"
 #include "timer.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
 //! Base FMM class
 template <typename T>
 class FmmBase {
@@ -295,6 +295,6 @@ class FmmBase {
     return err;
   }
 };
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 
 #endif  // INCLUDE_EXAFMM_FMM_BASE_H_

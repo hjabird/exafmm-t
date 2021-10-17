@@ -11,6 +11,7 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_SCALE_INVARIANT_H
 #define INCLUDE_EXAFMM_SCALE_INVARIANT_H
+
 #include <cstring>      // std::memset
 #include <fstream>      // std::ofstream
 #include <type_traits>  // std::is_same
@@ -19,7 +20,8 @@
 #include "intrinsics.h"
 #include "math_wrapper.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
+
 template <typename T>
 class FmmScaleInvariant : public FmmBase<T> {
   /** For the variables from base class that do not template parameter T,
@@ -734,5 +736,5 @@ void FmmScaleInvariant<real_t>::ifft_dn_check(std::vector<size_t>& ifft_offset,
   }
   fft_destroy_plan(plan);
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_SCALE_INVARIANT_H

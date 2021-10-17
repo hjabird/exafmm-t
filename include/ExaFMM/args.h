@@ -21,7 +21,7 @@
 #include <iostream>
 #include <string>
 
-namespace exafmm_t {
+namespace ExaFMM {
 
 class Args {
  public:
@@ -123,5 +123,5 @@ class Args {
               << " : " << k << std::endl;
   }
 };
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_ARGS_H

@@ -18,7 +18,7 @@
 #include "ExaFMM/dataset.h"
 #include "ExaFMM/laplace.h"
 
-using namespace exafmm_t;
+using namespace ExaFMM;
 
 int main(int argc, char **argv) {
   Args args(argc, argv);

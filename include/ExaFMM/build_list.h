@@ -17,12 +17,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "exafmm_t.h"
+#include "exafmm.h"
 #include "fmm_base.h"
 #include "geometry.h"
 #include "hilbert.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
+
 using std::abs;
 using std::max;
 using std::queue;
@@ -282,5 +283,5 @@ void build_list(Nodes<T>& nodes, const FmmBase<T>& fmm) {
     build_other_list(node, nodes, fmm, leaf_keys, key2id);
   }
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_BUILD_LIST_H_

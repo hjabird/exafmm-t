@@ -13,9 +13,9 @@
 #define INCLUDE_EXAFMM_DATASET_H_
 #include <random>
 
-#include "exafmm_t.h"
+#include "exafmm.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
 /**
  * @brief Generate uniform distribution in a cube from 0 to 1.
  *
@@ -169,5 +169,5 @@ Bodies<complex_t> init_sources(int numBodies, const char* distribution,
   }
   return bodies;
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_DATASET_H_

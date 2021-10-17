@@ -21,7 +21,7 @@
 #ifndef INCLUDE_EXAFMM_INTRINSICS_H_
 #define INCLUDE_EXAFMM_INTRINSICS_H_
 
-namespace exafmm_t {
+namespace ExaFMM {
 #if FLOAT
 inline void matmult_8x8x2(float*& M_, float*& IN0, float*& IN1, float*& OUT0,
                           float*& OUT1) {
@@ -400,5 +400,5 @@ inline void matmult_8x8x2(real_t*& M_, real_t*& IN0, real_t*& IN1,
 }
 #endif
 #endif
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // intrinsics_h

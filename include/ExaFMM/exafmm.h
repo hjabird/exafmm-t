@@ -11,6 +11,7 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_EXAFMM_H_
 #define INCLUDE_EXAFMM_EXAFMM_H_
+
 #include <fftw3.h>
 #include <omp.h>
 
@@ -26,7 +27,8 @@
 #include "args.h"
 #include "vec.h"
 
-namespace exafmm_t {
+namespace ExaFMM {
+
 const int MEM_ALIGN = 64;
 const int CACHE_SIZE = 512;
 const int NCHILD = 8;
@@ -175,5 +177,5 @@ std::vector<std::vector<int>>
                //!< for each interaction type (outer)
 std::vector<std::vector<int>>
     M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_EXAFMM_H_

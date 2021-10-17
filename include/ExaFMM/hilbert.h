@@ -15,10 +15,10 @@
 
 #include <cstdlib>
 
-#include "exafmm_t.h"
+#include "exafmm.h"
 #define EXAFMM_HILBERT 0  //! Set this to 1 for Hilbert
 
-namespace exafmm_t {
+namespace ExaFMM {
 /**
  * @brief Calculate levelwise offset of Hilbert key.
  *
@@ -228,5 +228,5 @@ vec3 getCoordinates(ivec3 iX, int level, vec3 x0, real_t r0) {
   }
   return X;
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_HILBERT_H_

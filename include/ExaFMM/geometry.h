@@ -9,12 +9,12 @@
  * Modified by HJA Bird
  *
  ******************************************************************************/
-
 #ifndef INCLUDE_EXAFMM_GEOMETRY_H_
 #define INCLUDE_EXAFMM_GEOMETRY_H_
-#include "exafmm_t.h"
 
-namespace exafmm_t {
+#include "exafmm.h"
+
+namespace ExaFMM {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
 // exafmm_t.h.
 
@@ -230,5 +230,5 @@ void init_rel_coord() {
     is_initialized = true;
   }
 }
-}  // namespace exafmm_t
+}  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_GEOMETRY_H_
