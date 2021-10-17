@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   }
 #endif
   stop("Total");
-  print("Evaluation Gflop", (float)flop/1e9);
+  print("Evaluation Gflop", (float)m_flop/1e9);
 
   bool sample = (args.numBodies >= 10000);
   RealVec err = fmm.verify(leafs, sample);

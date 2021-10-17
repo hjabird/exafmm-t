@@ -6,10 +6,8 @@
 const int SIMD_BYTES = 64;
 #elif __AVX__
 const int SIMD_BYTES = 32;
-#elif __SSE__
+#else // __SSE__ is assumed on MSVC
 const int SIMD_BYTES = 16;
-#else
-#error no SIMD
 #endif
 
 #ifndef EXAFMM_RSQRT_APPROX
@@ -26,6 +24,9 @@ namespace exafmm_t {
     vec(){}
     vec(const T &v) {
       for (int i=0; i<N; i++) data[i] = v;
+    }
+    vec(const T* v, size_t stride) {
+        for (int i = 0; i < N; i++) data[i * stride / sizeof(T)] = *(v + stride * i);
     }
     vec(const vec &v) {
       for (int i=0; i<N; i++) data[i] = v[i];
@@ -1178,7 +1179,7 @@ namespace exafmm_t {
   };
 #endif
 
-#ifdef __SSE__
+#if !defined(__AVX__) && !(defined(__AVX512F__) || defined(__MIC__) )
 #if EXAFMM_VEC_VERBOSE
 #pragma message("Overloading vector operators for SSE")
 #endif

@@ -529,7 +529,7 @@ namespace exafmm_t {
     // compute M2L kernel matrix, perform DFT
     RealVec trg_coord(3,0);
 #pragma omp parallel for
-    for (size_t i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
+    for (long long int i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
       real_t coord[3];
       for (int d=0; d<3; d++) {
         coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 / 0.5;  // relative coords
@@ -541,7 +541,7 @@ namespace exafmm_t {
     }
     // convert M2L_Helper to M2L and reorder data layout to improve locality
 #pragma omp parallel for
-    for (size_t i=0; i<REL_COORD[M2L_Type].size(); ++i) {
+    for (long long int i=0; i<REL_COORD[M2L_Type].size(); ++i) {
       for (int j=0; j<NCHILD*NCHILD; j++) {   // loop over child's relative positions
         int child_rel_idx = M2L_INDEX_MAP[i][j];
         if (child_rel_idx != -1) {
@@ -575,7 +575,7 @@ namespace exafmm_t {
                                           (fft_complex*)(&fftw_out[0]), nullptr, 1, nfreq_,
                                           FFTW_ESTIMATE);
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<fft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<fft_offset.size(); node_idx++) {
       RealVec buffer(fft_size, 0);
       real_t* up_equiv = &all_up_equiv[fft_offset[node_idx]];  // offset ptr of node's 8 child's upward_equiv in all_up_equiv, size=8*nsurf_
       // upward_equiv_fft (input of r2c) here should have a size of N3*NCHILD
@@ -621,7 +621,7 @@ namespace exafmm_t {
                                  (real_t*)(&fftw_out[0]), nullptr, 1, nconv_,
                                  FFTW_ESTIMATE);
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
       RealVec buffer0(fft_size, 0);
       RealVec buffer1(fft_size, 0);
       real_t* dn_check_f = &fft_out[fft_size*node_idx];  // offset ptr for node_idx in fft_out vector, size=fft_size

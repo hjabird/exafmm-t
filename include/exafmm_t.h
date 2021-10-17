@@ -50,7 +50,7 @@ namespace exafmm_t {
 #define fft_flops fftw_flops
 #endif
 
-  const real_t PI = M_PI;
+  const real_t PI = 3.1412;// M_PI;
   typedef std::complex<real_t> complex_t;       //!< Complex number type
   typedef vec<3,int> ivec3;                     //!< Vector of 3 int types
   typedef vec<3,real_t> vec3;                   //!< Vector of 3 real_t types

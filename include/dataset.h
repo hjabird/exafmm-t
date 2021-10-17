@@ -1,6 +1,7 @@
 #ifndef dataset_h
 #define dataset_h
 #include "exafmm_t.h"
+#include <random>
 
 namespace exafmm_t {
   /**
@@ -12,12 +13,13 @@ namespace exafmm_t {
    * @return Bodies Vector of bodies.
    */
   template <typename T>
-  Bodies<T> cube(int numBodies, int seed) {
+  Bodies<T> cube(int numBodies, int /* seed */) {
     Bodies<T> bodies(numBodies);
-    srand48(seed);
+    std::uniform_real_distribution<double> uniformDist(0., 1.);
+    std::default_random_engine randomEngine;
     for (int b=0; b<numBodies; b++) {
       for (int d=0; d<3; d++) {
-        bodies[b].X[d] = drand48();
+        bodies[b].X[d] = uniformDist(randomEngine);
       }
     }
     return bodies;
@@ -32,12 +34,13 @@ namespace exafmm_t {
    * @return Bodies Vector of bodies.
    */
   template <typename T>
-  Bodies<T> sphere(int numBodies, int seed) {
+  Bodies<T> sphere(int numBodies, int /*seed*/) {
     Bodies<T> bodies(numBodies);
-    srand48(seed);
+    std::uniform_real_distribution<double> uniformDist(0., 1.);
+    std::default_random_engine randomEngine;
     for (int b=0; b<numBodies; b++) {
       for (int d=0; d<3; d++) {
-        bodies[b].X[d] = drand48() * 2 - 1;
+        bodies[b].X[d] = uniformDist(randomEngine) * 2 - 1;
       }
       real_t r = std::sqrt(norm(bodies[b].X));
       bodies[b].X /= r;
@@ -56,13 +59,14 @@ namespace exafmm_t {
   template <typename T>
   Bodies<T> plummer(int numBodies, int seed) {
     Bodies<T> bodies(numBodies);
-    srand48(seed);
+    std::uniform_real_distribution<double> uniformDist(0., 1.);
+    std::default_random_engine randomEngine;
     int i = 0;
     int Xmax = 0;
     while (i < numBodies) {
-      real_t X1 = drand48();
-      real_t X2 = drand48();
-      real_t X3 = drand48();
+      real_t X1 = uniformDist(randomEngine);
+      real_t X2 = uniformDist(randomEngine);
+      real_t X3 = uniformDist(randomEngine);
       real_t R = 1.0 / sqrt( (pow(X1, -2.0 / 3.0) - 1.0) );
       if (R < 100) {
         real_t Z = (1.0 - 2.0 * X2) * R;
@@ -129,8 +133,10 @@ namespace exafmm_t {
   template <typename T>
   Bodies<T> init_sources(int numBodies, const char* distribution, int seed) {
     Bodies<T> bodies = init_targets<T>(numBodies, distribution, seed);
+    std::uniform_real_distribution<double> uniformDist(0., 1.);
+    std::default_random_engine randomEngine;
     for (int b=0; b<numBodies; ++b) {
-      bodies[b].q = drand48() - 0.5;
+      bodies[b].q = uniformDist(randomEngine) - 0.5;
     }
     return bodies;
   }
@@ -138,9 +144,11 @@ namespace exafmm_t {
   // Template specialization of init_source for complex type
   template <>
   Bodies<complex_t> init_sources(int numBodies, const char* distribution, int seed) {
+      std::uniform_real_distribution<double> uniformDist(0., 1.);
+      std::default_random_engine randomEngine;
     Bodies<complex_t> bodies = init_targets<complex_t>(numBodies, distribution, seed);
     for (int b=0; b<numBodies; ++b) {
-      bodies[b].q = complex_t(drand48()-0.5, drand48()-0.5);
+      bodies[b].q = complex_t(uniformDist(randomEngine)-0.5, uniformDist(randomEngine) -0.5);
     }
     return bodies;
   }

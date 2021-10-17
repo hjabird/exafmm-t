@@ -163,7 +163,7 @@ namespace exafmm_t {
         up_check_surf[level] = surface(this->p, this->r0, level, c, 2.95);
       }
 #pragma omp parallel for
-      for (size_t i=0; i<leafs.size(); i++) {
+      for (long long int i=0; i<leafs.size(); i++) {
         Node<T>* leaf = leafs[i];
         int level = leaf->level;
         // calculate upward check potential induced by sources' charges
@@ -195,7 +195,7 @@ namespace exafmm_t {
         dn_equiv_surf[level] = surface(this->p, this->r0, level, c, 2.95);
       }
 #pragma omp parallel for
-      for (size_t i=0; i<leafs.size(); i++) {
+      for (long long i=0; i<leafs.size(); i++) {
         Node<T>* leaf = leafs[i];
         int level = leaf->level;
         // down check surface potential -> equivalent surface charge
@@ -221,12 +221,11 @@ namespace exafmm_t {
     void M2M(Node<T>* node) {
       int& nsurf_ = this->nsurf;
       if (node->is_leaf) return;
+#pragma omp parallel for schedule(dynamic)
       for (int octant=0; octant<8; octant++) {
         if (node->children[octant])
-#pragma omp task untied
           M2M(node->children[octant]);
       }
-#pragma omp taskwait
       for (int octant=0; octant<8; octant++) {
         if (node->children[octant]) {
           Node<T>* child = node->children[octant];
@@ -254,12 +253,11 @@ namespace exafmm_t {
             child->dn_equiv[k] += buffer[k];
         }
       }
+#pragma omp parallel for schedule(dynamic)
       for (int octant=0; octant<8; octant++) {
         if (node->children[octant])
-#pragma omp task untied
           L2L(node->children[octant]);
       }
-#pragma omp taskwait
     }
 
     void M2L_setup(NodePtrs<T>& nonleafs) {
@@ -347,12 +345,12 @@ namespace exafmm_t {
 
       // initialize fft_out with zero
 #pragma omp parallel for
-      for (size_t i=0; i<fft_out.capacity()/fft_size; ++i) {
+      for (long long i=0; i<fft_out.capacity()/fft_size; ++i) {
         std::memset(fft_out.data()+i*fft_size, 0, fft_size*sizeof(real_t));
       }
       
 #pragma omp parallel for
-      for (size_t iblk_inter=0; iblk_inter<nblk_inter; iblk_inter++) {
+      for (long long iblk_inter=0; iblk_inter<nblk_inter; iblk_inter++) {
         size_t interaction_count_offset0 = (iblk_inter==0 ? 0 : interaction_count_offset[iblk_inter-1]);
         size_t interaction_count_offset1 = interaction_count_offset[iblk_inter];
         size_t interaction_count = interaction_count_offset1 - interaction_count_offset0;
@@ -539,7 +537,7 @@ namespace exafmm_t {
     for (int l=1; l<this->depth+1; ++l) {
       // compute M2L kernel matrix, perform DFT
 #pragma omp parallel for
-      for (size_t i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
+      for (long long int i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
         real_t coord[3];
         for (int d=0; d<3; d++) {
           coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 * powf(0.5, l-1);  // relative coords
@@ -551,7 +549,7 @@ namespace exafmm_t {
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
 #pragma omp parallel for
-      for (size_t i=0; i<REL_COORD[M2L_Type].size(); ++i) {
+      for (long long int i=0; i<REL_COORD[M2L_Type].size(); ++i) {
         for (int j=0; j<NCHILD*NCHILD; j++) {   // loop over child's relative positions
           int child_rel_idx = M2L_INDEX_MAP[i][j];
           if (child_rel_idx != -1) {
@@ -594,7 +592,7 @@ namespace exafmm_t {
     for (int l=1; l<this->depth+1; ++l) {
       // compute M2L kernel matrix, perform DFT
 #pragma omp parallel for
-      for (size_t i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
+      for (long long int i=0; i<REL_COORD[M2L_Helper_Type].size(); ++i) {
         real_t coord[3];
         for (int d=0; d<3; d++) {
           coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 * powf(0.5, l-1);  // relative coords
@@ -607,7 +605,7 @@ namespace exafmm_t {
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
 #pragma omp parallel for
-      for (size_t i=0; i<REL_COORD[M2L_Type].size(); ++i) {
+      for (long long int i=0; i<REL_COORD[M2L_Type].size(); ++i) {
         for (int j=0; j<NCHILD*NCHILD; j++) {   // loop over child's relative positions
           int child_rel_idx = M2L_INDEX_MAP[i][j];
           if (child_rel_idx != -1) {
@@ -646,7 +644,7 @@ namespace exafmm_t {
                                           FFTW_ESTIMATE);
 
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<fft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<fft_offset.size(); node_idx++) {
       RealVec buffer(fft_size, 0);
       RealVec equiv_t(NCHILD*nconv_, 0.);
 
@@ -687,7 +685,7 @@ namespace exafmm_t {
                                       FFTW_FORWARD, FFTW_ESTIMATE);
 
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<fft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<fft_offset.size(); node_idx++) {
       RealVec buffer(fft_size, 0);
       ComplexVec equiv_t(NCHILD*nconv_, complex_t(0.,0.));
 
@@ -729,7 +727,7 @@ namespace exafmm_t {
                     FFTW_ESTIMATE);
 
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
       RealVec buffer0(fft_size, 0);
       RealVec buffer1(fft_size, 0);
       real_t* dn_check_f = &fft_out[fft_size*node_idx];  // offset ptr for node_idx in fft_out vector, size=fftsize
@@ -767,7 +765,7 @@ namespace exafmm_t {
                                       FFTW_BACKWARD, FFTW_ESTIMATE);
 
 #pragma omp parallel for
-    for (size_t node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
+    for (long long int node_idx=0; node_idx<ifft_offset.size(); node_idx++) {
       RealVec buffer0(fft_size, 0);
       ComplexVec buffer1(NCHILD*nconv_, 0);
       real_t* dn_check_f = &fft_out[fft_size*node_idx];

@@ -4,17 +4,19 @@
 #include <iostream>
 #include <map>
 #include <string>
-#include <sys/time.h>
-#include <unistd.h>
+#include <chrono>
+#include <atomic>
 
 namespace exafmm_t {
-  static const int stringLength = 20;           //!< Length of formatted string
-  static const int decimal = 7;                 //!< Decimal precision
-  static const int wait = 100;                  //!< Waiting time between output of different ranks
-  static const int dividerLength = stringLength + decimal + 9;  // length of output section divider
-  long long flop = 0;
-  timeval time;
-  std::map<std::string, timeval> timer;
+    static const int stringLength = 20;           //!< Length of formatted string
+    static const int decimal = 7;                 //!< Decimal precision
+    static const int wait = 100;                  //!< Waiting time between output of different ranks
+    static const int dividerLength = stringLength + decimal + 9;  // length of output section divider
+    std::atomic<long long> m_flop{ 0 };
+  static auto m_clock = std::chrono::high_resolution_clock{};
+  using time_point_t = std::chrono::time_point<decltype(m_clock)>;
+  time_point_t m_time;
+  std::map<std::string, time_point_t> m_timer;
 
   void print(std::string s) {
     // if (!VERBOSE | (MPIRANK != 0)) return;
@@ -34,6 +36,16 @@ namespace exafmm_t {
     std::cout << v << std::endl;
   }
 
+  template<>
+  void print<std::chrono::duration<double>>(std::string s, std::chrono::duration<double> v, bool fixed) {
+      std::cout << std::setw(stringLength) << std::left << s << " : ";
+      if (fixed)
+          std::cout << std::setprecision(decimal) << std::fixed << std::scientific;
+      else
+          std::cout << std::setprecision(1) << std::scientific;
+      std::cout << v.count() << std::endl;
+  }
+
   void print_divider(std::string s) {
     s.insert(0, " ");
     s.append(" ");
@@ -43,19 +55,17 @@ namespace exafmm_t {
   }
 
   void add_flop(long long n) {
-#pragma omp atomic update
-    flop += n;
+      m_flop += n;
   }
 
   void start(std::string event) {
-    gettimeofday(&time, NULL);
-    timer[event] = time;
+     m_time = m_clock.now();
+    m_timer[event] = m_time;
   }
 
-  double stop(std::string event, bool verbose=true) {
-    gettimeofday(&time, NULL);
-    double eventTime = time.tv_sec - timer[event].tv_sec +
-      (time.tv_usec - timer[event].tv_usec) * 1e-6;
+  std::chrono::duration<double> stop(std::string event, bool verbose=true) {
+      m_time = m_clock.now();
+      std::chrono::duration<double> eventTime = m_time - m_timer[event];
     if (verbose)
       print(event, eventTime);
     return eventTime;

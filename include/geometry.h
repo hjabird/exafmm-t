@@ -73,7 +73,7 @@ namespace exafmm_t {
    * @return Vector of coordinates of convolution grid.
    */
   RealVec convolution_grid(int p, real_t r0, int level, real_t * c) {
-    real_t d = 2 * r0 * powf(0.5, level);
+    real_t d = 2 * r0 * std::pow(0.5, level);
     real_t a = d * 1.05;  // side length of upward equivalent/downward check box
     int n1 = p * 2;
     int n2 = n1 * n1;

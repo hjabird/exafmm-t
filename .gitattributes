@@ -1,4 +1,0 @@
-build-aux/* linguist-vendored
-m4/* linguist-vendored
-Makefile.in linguist-vendored
-Makefile.am linguist-vendored
