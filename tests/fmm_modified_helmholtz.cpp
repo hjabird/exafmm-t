@@ -1,11 +1,22 @@
+#pragma once
+/******************************************************************************
+ *
+ * ExaFMM
+ * A high-performance fast multipole method library with C++ and
+ * python interfaces.
+ *
+ * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
+ * Modified by HJA Bird
+ *
+ ******************************************************************************/
 #if NON_ADAPTIVE
 #include "build_non_adaptive_tree.h"
 #else
-#include "build_tree.h"
+#include "ExaFMM/build_tree.h"
 #endif
-#include "build_list.h"
-#include "dataset.h"
-#include "modified_helmholtz.h"
+#include "ExaFMM/build_list.h"
+#include "ExaFMM/dataset.h"
+#include "ExaFMM/modified_helmholtz.h"
 
 using namespace exafmm_t;
 
@@ -17,8 +28,10 @@ int main(int argc, char **argv) {
   omp_set_num_threads(args.threads);
 
   print_divider("Time");
-  Bodies<real_t> sources = init_sources<real_t>(args.numBodies, args.distribution, 0);
-  Bodies<real_t> targets = init_targets<real_t>(args.numBodies, args.distribution, 5);
+  Bodies<real_t> sources =
+      init_sources<real_t>(args.numBodies, args.distribution, 0);
+  Bodies<real_t> targets =
+      init_targets<real_t>(args.numBodies, args.distribution, 5);
 
   start("Total");
   ModifiedHelmholtzFmm fmm(args.P, args.ncrit, args.k);

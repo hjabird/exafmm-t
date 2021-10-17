@@ -1,5 +1,16 @@
-#ifndef math_wrapper_h
-#define math_wrapper_h
+#pragma once
+/******************************************************************************
+ *
+ * ExaFMM
+ * A high-performance fast multipole method library with C++ and
+ * python interfaces.
+ *
+ * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
+ * Modified by HJA Bird
+ *
+ ******************************************************************************/
+#ifndef INCLUDE_MATHS_WRAPPER_H_
+#define INCLUDE_MATHS_WRAPPER_H_
 #include <complex>
 #include "exafmm_t.h"
 #include "timer.h"
@@ -166,4 +177,4 @@ namespace exafmm_t {
   }
 
 }  // end namespace exafmm_t
-#endif
+#endif // INCLUDE_MATHS_WRAPPER_H_

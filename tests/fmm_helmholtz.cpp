@@ -1,11 +1,22 @@
+#pragma once
+/******************************************************************************
+ *
+ * ExaFMM
+ * A high-performance fast multipole method library with C++ and
+ * python interfaces.
+ *
+ * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
+ * Modified by HJA Bird
+ *
+ ******************************************************************************/
 #if NON_ADAPTIVE
 #include "build_non_adaptive_tree.h"
 #else
-#include "build_tree.h"
+#include "ExaFMM/build_tree.h"
 #endif
-#include "build_list.h"
-#include "dataset.h"
-#include "helmholtz.h"
+#include "ExaFMM/build_list.h"
+#include "ExaFMM/dataset.h"
+#include "ExaFMM/helmholtz.h"
 
 using namespace exafmm_t;
 
@@ -17,8 +28,10 @@ int main(int argc, char **argv) {
   omp_set_num_threads(args.threads);
 
   print_divider("Time");
-  Bodies<complex_t> sources = init_sources<complex_t>(args.numBodies, args.distribution, 0);
-  Bodies<complex_t> targets = init_targets<complex_t>(args.numBodies, args.distribution, 5);
+  Bodies<complex_t> sources =
+      init_sources<complex_t>(args.numBodies, args.distribution, 0);
+  Bodies<complex_t> targets =
+      init_targets<complex_t>(args.numBodies, args.distribution, 5);
 
   start("Total");
   complex_t wavek(5, 10);
@@ -63,7 +76,7 @@ int main(int argc, char **argv) {
   print("Root Radius R", fmm.r0);
   print("Tree Depth", fmm.depth);
   print("Leaf Nodes", leafs.size());
-  print("Helmholtz kD", 2*fmm.r0*fmm.wavek);
+  print("Helmholtz kD", 2 * fmm.r0 * fmm.wavek);
 
   return 0;
 }
