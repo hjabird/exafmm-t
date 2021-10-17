@@ -1,6 +1,16 @@
 # exafmm-t 
 
-[![Build Status](https://travis-ci.com/exafmm/exafmm-t.svg?branch=master)](https://travis-ci.com/exafmm/exafmm-t)
+This is modified version of the ExaFMM-t project. 
+
+The following changes from the original are made:
+* Fixed compiler errors on Windows
+  * Simplified OpenMP implementation where not supported by MSVC
+  * CMakeLists.txt modified. Now builds with VCPGK.
+  * SSE implementation updated.
+* Removed Linux-specific libraries
+  * std::chrono is now used for timing
+  * docopt is now used
+
 [![status](https://joss.theoj.org/papers/0faabca7e0ef645b42d7dd72cc924ecc/status.svg)](https://joss.theoj.org/papers/0faabca7e0ef645b42d7dd72cc924ecc)
 
 ## Cite as
