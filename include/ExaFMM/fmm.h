@@ -11,6 +11,8 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_FMM_H_
 #define INCLUDE_EXAFMM_FMM_H_
+
+#include <cassert>
 #include <cstring>      // std::memset
 #include <fstream>      // std::ofstream
 #include <type_traits>  // std::is_same
@@ -453,8 +455,8 @@ class Fmm : public FmmBase<T> {
 
     // allocate memory
     std::vector<T> all_up_equiv, all_dn_equiv;
-    all_up_equiv.reserve(nnodes * nsurf_);
-    all_dn_equiv.reserve(nnodes * nsurf_);
+    all_up_equiv.resize(nnodes * nsurf_);
+    all_dn_equiv.resize(nnodes * nsurf_);
     std::vector<AlignedVec> matrix_M2L(npos, AlignedVec(fft_size * NCHILD, 0));
 
     // setup ifstream of M2L precomputation matrix
@@ -481,8 +483,8 @@ class Fmm : public FmmBase<T> {
         ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), msize);
       }
       AlignedVec fft_in, fft_out;
-      fft_in.reserve(m2ldata[l].fft_offset.size() * fft_size);
-      fft_out.reserve(m2ldata[l].ifft_offset.size() * fft_size);
+      fft_in.resize(m2ldata[l].fft_offset.size() * fft_size);
+      fft_out.resize(m2ldata[l].ifft_offset.size() * fft_size);
       fft_up_equiv(m2ldata[l].fft_offset, all_up_equiv, fft_in);
       hadamard_product(m2ldata[l].interaction_count_offset,
                        m2ldata[l].interaction_offset_f, fft_in, fft_out,
@@ -854,6 +856,7 @@ void Fmm<complex_t>::ifft_dn_check(std::vector<size_t>& ifft_offset,
   int& nsurf_ = this->nsurf;
   int& nconv_ = this->nconv;
   int& nfreq_ = this->nfreq;
+  assert(fft_out.size() >= ifft_offset.size() * nfreq_ * NCHILD);
   int n1 = this->p * 2;
   auto map = generate_surf2conv_dn(p);
 
