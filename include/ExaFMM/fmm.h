@@ -12,6 +12,8 @@
 #ifndef INCLUDE_EXAFMM_FMM_H_
 #define INCLUDE_EXAFMM_FMM_H_
 
+#include <Eigen/Dense>
+#include <Eigen/SVD>
 #include <cassert>
 #include <cstring>      // std::memset
 #include <fstream>      // std::ofstream
@@ -25,14 +27,17 @@ namespace ExaFMM {
 
 template <typename T>
 class Fmm : public FmmBase<T> {
+  using matrix_t = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
+  using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+
  public:
   /* precomputation matrices */
-  std::vector<std::vector<T>> matrix_UC2E_U;
-  std::vector<std::vector<T>> matrix_UC2E_V;
-  std::vector<std::vector<T>> matrix_DC2E_U;
-  std::vector<std::vector<T>> matrix_DC2E_V;
-  std::vector<std::vector<std::vector<T>>> matrix_M2M;
-  std::vector<std::vector<std::vector<T>>> matrix_L2L;
+  std::vector<matrix_t> matrix_UC2E_U;
+  std::vector<matrix_t> matrix_UC2E_V;
+  std::vector<matrix_t> matrix_DC2E_U;
+  std::vector<matrix_t> matrix_DC2E_V;
+  std::vector<std::vector<matrix_t>> matrix_M2M;
+  std::vector<std::vector<matrix_t>> matrix_L2L;
 
   std::vector<M2LData> m2ldata;
 
@@ -47,17 +52,17 @@ class Fmm : public FmmBase<T> {
   void initialize_matrix() {
     int& nsurf_ = this->nsurf;
     int& depth_ = this->depth;
-    matrix_UC2E_V.resize(depth_ + 1, std::vector<T>(nsurf_ * nsurf_));
-    matrix_UC2E_U.resize(depth_ + 1, std::vector<T>(nsurf_ * nsurf_));
-    matrix_DC2E_V.resize(depth_ + 1, std::vector<T>(nsurf_ * nsurf_));
-    matrix_DC2E_U.resize(depth_ + 1, std::vector<T>(nsurf_ * nsurf_));
+    matrix_UC2E_V.resize(depth_ + 1, matrix_t(nsurf_, nsurf_));
+    matrix_UC2E_U.resize(depth_ + 1, matrix_t(nsurf_, nsurf_));
+    matrix_DC2E_V.resize(depth_ + 1, matrix_t(nsurf_, nsurf_));
+    matrix_DC2E_U.resize(depth_ + 1, matrix_t(nsurf_, nsurf_));
     matrix_M2M.resize(depth_ + 1);
     matrix_L2L.resize(depth_ + 1);
     for (int level = 0; level <= depth_; ++level) {
       matrix_M2M[level].resize(REL_COORD[M2M_Type].size(),
-                               std::vector<T>(nsurf_ * nsurf_));
+                               matrix_t(nsurf_, nsurf_));
       matrix_L2L[level].resize(REL_COORD[L2L_Type].size(),
-                               std::vector<T>(nsurf_ * nsurf_));
+                               matrix_t(nsurf_, nsurf_));
     }
   }
 
@@ -79,21 +84,15 @@ class Fmm : public FmmBase<T> {
                                  parent_coord[2] + coord[2] * s};
         RealVec child_up_equiv_surf =
             surface(this->p, this->r0, level + 1, child_coord, 1.05);
-        std::vector<T> matrix_pc2ce(nsurf_ * nsurf_);
+        matrix_t matrix_pc2ce(nsurf_, nsurf_);
         this->kernel_matrix(parent_up_check_surf, child_up_equiv_surf,
                             matrix_pc2ce);
         // M2M
-        std::vector<T> buffer(nsurf_ * nsurf_);
-        gemm(nsurf_, nsurf_, nsurf_, &(matrix_UC2E_U[level][0]),
-             &matrix_pc2ce[0], &buffer[0]);
-        gemm(nsurf_, nsurf_, nsurf_, &(matrix_UC2E_V[level][0]), &buffer[0],
-             &(matrix_M2M[level][i][0]));
+        matrix_M2M[level][i] =
+            matrix_UC2E_V[level] * matrix_UC2E_U[level] * matrix_pc2ce;
         // L2L
-        matrix_pc2ce = transpose(matrix_pc2ce, nsurf_, nsurf_);
-        gemm(nsurf_, nsurf_, nsurf_, &matrix_pc2ce[0],
-             &(matrix_DC2E_V[level][0]), &buffer[0]);
-        gemm(nsurf_, nsurf_, nsurf_, &buffer[0], &(matrix_DC2E_U[level][0]),
-             &(matrix_L2L[level][i][0]));
+        matrix_L2L[level][i] = matrix_pc2ce.transpose() * matrix_DC2E_V[level] *
+                               matrix_DC2E_U[level];
       }
     }
   }
@@ -110,20 +109,20 @@ class Fmm : public FmmBase<T> {
     size_t size = this->nsurf * this->nsurf;
     for (int l = 0; l <= this->depth; l++) {
       // UC2E, DC2E
-      file.write(reinterpret_cast<char*>(&matrix_UC2E_U[l][0]),
+      file.write(reinterpret_cast<char*>(matrix_UC2E_U[l].data()),
                  size * sizeof(T));
-      file.write(reinterpret_cast<char*>(&matrix_UC2E_V[l][0]),
+      file.write(reinterpret_cast<char*>(matrix_UC2E_V[l].data()),
                  size * sizeof(T));
-      file.write(reinterpret_cast<char*>(&matrix_DC2E_U[l][0]),
+      file.write(reinterpret_cast<char*>(matrix_DC2E_U[l].data()),
                  size * sizeof(T));
-      file.write(reinterpret_cast<char*>(&matrix_DC2E_V[l][0]),
+      file.write(reinterpret_cast<char*>(matrix_DC2E_V[l].data()),
                  size * sizeof(T));
       // M2M, L2L
       for (auto& vec : matrix_M2M[l]) {
-        file.write(reinterpret_cast<char*>(&vec[0]), size * sizeof(T));
+        file.write(reinterpret_cast<char*>(vec.data()), size * sizeof(T));
       }
       for (auto& vec : matrix_L2L[l]) {
-        file.write(reinterpret_cast<char*>(&vec[0]), size * sizeof(T));
+        file.write(reinterpret_cast<char*>(vec.data()), size * sizeof(T));
       }
     }
   }
@@ -149,20 +148,20 @@ class Fmm : public FmmBase<T> {
           size_t size = nsurf_ * nsurf_;
           for (int l = 0; l <= depth_; l++) {
             // UC2E, DC2E
-            file.read(reinterpret_cast<char*>(&matrix_UC2E_U[l][0]),
+            file.read(reinterpret_cast<char*>(matrix_UC2E_U[l].data()),
                       size * sizeof(T));
-            file.read(reinterpret_cast<char*>(&matrix_UC2E_V[l][0]),
+            file.read(reinterpret_cast<char*>(matrix_UC2E_V[l].data()),
                       size * sizeof(T));
-            file.read(reinterpret_cast<char*>(&matrix_DC2E_U[l][0]),
+            file.read(reinterpret_cast<char*>(matrix_DC2E_U[l].data()),
                       size * sizeof(T));
-            file.read(reinterpret_cast<char*>(&matrix_DC2E_V[l][0]),
+            file.read(reinterpret_cast<char*>(matrix_DC2E_V[l].data()),
                       size * sizeof(T));
             // M2M, L2L
             for (auto& vec : matrix_M2M[l]) {
-              file.read(reinterpret_cast<char*>(&vec[0]), size * sizeof(T));
+              file.read(reinterpret_cast<char*>(vec.data()), size * sizeof(T));
             }
             for (auto& vec : matrix_L2L[l]) {
-              file.read(reinterpret_cast<char*>(&vec[0]), size * sizeof(T));
+              file.read(reinterpret_cast<char*>(vec.data()), size * sizeof(T));
             }
           }
           this->is_precomputed = true;
@@ -210,12 +209,13 @@ class Fmm : public FmmBase<T> {
       }
       this->potential_P2P(leaf->src_coord, leaf->src_value, check_coord,
                           leaf->up_equiv);
-      std::vector<T> buffer(nsurf_);
-      std::vector<T> equiv(nsurf_);
-      gemv(nsurf_, nsurf_, &(matrix_UC2E_U[level][0]), &(leaf->up_equiv[0]),
-           &buffer[0]);
-      gemv(nsurf_, nsurf_, &(matrix_UC2E_V[level][0]), &buffer[0], &equiv[0]);
-      for (int k = 0; k < nsurf_; k++) leaf->up_equiv[k] = equiv[k];
+      using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
+      eigen_vec_t eigenUpEquiv(&(leaf->up_equiv[0]), nsurf_);
+      auto buffer = matrix_UC2E_U[level] * eigenUpEquiv;
+      auto equiv = matrix_UC2E_V[level] * buffer;
+      for (int k = 0; k < nsurf_; k++) {
+        leaf->up_equiv[k] = equiv[k];
+      }
     }
   }
 
@@ -234,12 +234,13 @@ class Fmm : public FmmBase<T> {
       Node<T>* leaf = leafs[i];
       int level = leaf->level;
       // down check surface potential -> equivalent surface charge
-      std::vector<T> buffer(nsurf_);
-      std::vector<T> equiv(nsurf_);
-      gemv(nsurf_, nsurf_, &(matrix_DC2E_U[level][0]), &(leaf->dn_equiv[0]),
-           &buffer[0]);
-      gemv(nsurf_, nsurf_, &(matrix_DC2E_V[level][0]), &buffer[0], &equiv[0]);
-      for (int k = 0; k < nsurf_; k++) leaf->dn_equiv[k] = equiv[k];
+      using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
+      eigen_vec_t eigenDnEquiv(&(leaf->dn_equiv[0]), nsurf_);
+      auto buffer = matrix_DC2E_U[level] * eigenDnEquiv;
+      auto equiv = matrix_DC2E_V[level] * buffer;
+      for (int k = 0; k < nsurf_; k++) {
+        leaf->dn_equiv[k] = equiv[k];
+      }
       // equivalent surface charge -> target potential
       RealVec equiv_coord(nsurf_ * 3);
       for (int k = 0; k < nsurf_; k++) {
@@ -254,6 +255,7 @@ class Fmm : public FmmBase<T> {
 
   //! M2M operator
   void M2M(Node<T>* node) {
+    using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
     int& nsurf_ = this->nsurf;
     if (node->is_leaf) return;
 #pragma omp parallel for schedule(dynamic)
@@ -263,10 +265,9 @@ class Fmm : public FmmBase<T> {
     for (int octant = 0; octant < 8; octant++) {
       if (node->children[octant]) {
         Node<T>* child = node->children[octant];
-        std::vector<T> buffer(nsurf_);
         int level = node->level;
-        gemv(nsurf_, nsurf_, &(matrix_M2M[level][octant][0]),
-             &child->up_equiv[0], &buffer[0]);
+        eigen_vec_t eigenDnEquiv(&(node->dn_equiv[0]), nsurf_);
+        auto buffer = matrix_M2M[level][octant] * eigenDnEquiv;
         for (int k = 0; k < nsurf_; k++) {
           node->up_equiv[k] += buffer[k];
         }
@@ -276,21 +277,27 @@ class Fmm : public FmmBase<T> {
 
   //! L2L operator
   void L2L(Node<T>* node) {
+    using eigen_mat_t =
+        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>>;
+    using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
     int& nsurf_ = this->nsurf;
     if (node->is_leaf) return;
     for (int octant = 0; octant < 8; octant++) {
       if (node->children[octant]) {
         Node<T>* child = node->children[octant];
-        std::vector<T> buffer(nsurf_);
         int level = node->level;
-        gemv(nsurf_, nsurf_, &(matrix_L2L[level][octant][0]),
-             &node->dn_equiv[0], &buffer[0]);
-        for (int k = 0; k < nsurf_; k++) child->dn_equiv[k] += buffer[k];
+        eigen_vec_t eigenDnEquiv(&(node->dn_equiv[0]), nsurf_);
+        auto buffer = matrix_L2L[level][octant] * eigenDnEquiv;
+        for (int k = 0; k < nsurf_; k++) {
+          child->dn_equiv[k] += buffer[k];
+        }
       }
     }
 #pragma omp parallel for schedule(dynamic)
     for (int octant = 0; octant < 8; octant++) {
-      if (node->children[octant]) L2L(node->children[octant]);
+      if (node->children[octant]) {
+        L2L(node->children[octant]);
+      }
     }
   }
 
@@ -511,30 +518,37 @@ void Fmm<real_t>::precompute_check2equiv() {
 #pragma omp parallel for
   for (int level = 0; level <= this->depth; ++level) {
     // compute kernel matrix
+    using eigen_mat_t =
+        Eigen::Map<Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic>>;
     RealVec up_check_surf = surface(this->p, this->r0, level, c, 2.95);
     RealVec up_equiv_surf = surface(this->p, this->r0, level, c, 1.05);
-    RealVec matrix_c2e(nsurf_ * nsurf_);  // UC2UE
-    this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
 
     // svd
-    RealVec S(nsurf_ * nsurf_);  // singular values
-    RealVec U(nsurf_ * nsurf_), VT(nsurf_ * nsurf_);
-    svd(nsurf_, nsurf_, &matrix_c2e[0], &S[0], &U[0], &VT[0]);
+    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> S(nsurf_, nsurf_),
+        matrix_c2e(nsurf_, nsurf);
+    this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
+    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> U(nsurf_, nsurf_),
+        V(nsurf_, nsurf_);
+    Eigen::BDCSVD<decltype(matrix_c2e)> svd(
+        matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    S = svd.singularValues();
+    U = svd.matrixU();
+    V = svd.matrixV();
+    // svd(nsurf_, nsurf_, &matrix_c2e[0], &S[0], &U[0], &VT[0]);
 
     // pseudo-inverse
     real_t max_S = 0;
     for (int i = 0; i < nsurf_; i++) {
-      max_S = fabs(S[i * nsurf_ + i]) > max_S ? fabs(S[i * nsurf_ + i]) : max_S;
+      max_S = std::abs(S(i, i)) > max_S ? std::abs(S(i, i)) : max_S;
     }
     for (int i = 0; i < nsurf_; i++) {
-      S[i * nsurf_ + i] =
-          S[i * nsurf_ + i] > EPS * max_S * 4 ? 1.0 / S[i * nsurf_ + i] : 0.0;
+      S(i, i) = S(i, i) > EPS * max_S * 4 ? 1.0 / S(i, i) : 0.0;
     }
-    RealVec V = transpose(VT, nsurf_, nsurf_);
-    matrix_UC2E_U[level] = transpose(U, nsurf_, nsurf_);
-    gemm(nsurf_, nsurf_, nsurf_, &V[0], &S[0], &(matrix_UC2E_V[level][0]));
-    matrix_DC2E_U[level] = VT;
-    gemm(nsurf_, nsurf_, nsurf_, &U[0], &S[0], &(matrix_DC2E_V[level][0]));
+
+    matrix_UC2E_U[level] = U.transpose();
+    matrix_UC2E_V[level] = V * S;
+    matrix_DC2E_U[level] = V.transpose();
+    matrix_DC2E_V[level] = U * S;
   }
 }
 
@@ -547,34 +561,40 @@ void Fmm<complex_t>::precompute_check2equiv() {
     // compute kernel matrix
     RealVec up_check_surf = surface(this->p, this->r0, level, c, 2.95);
     RealVec up_equiv_surf = surface(this->p, this->r0, level, c, 1.05);
-    ComplexVec matrix_c2e(nsurf_ * nsurf_);  // UC2UE
+    matrix_t matrix_c2e(nsurf_, nsurf_);  // UC2UE
     this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
 
     // svd
-    RealVec S(nsurf_ * nsurf_);  // singular values
-    ComplexVec U(nsurf_ * nsurf_), VH(nsurf_ * nsurf_);
-    svd(nsurf_, nsurf_, &matrix_c2e[0], &S[0], &U[0], &VH[0]);
+    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> S(
+        nsurf_, nsurf_);  // singular values
+    matrix_t U(nsurf_, nsurf_), V(nsurf_, nsurf_);
+    Eigen::BDCSVD<decltype(matrix_c2e)> svd(
+        matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    S = svd.singularValues();
+    U = svd.matrixU();
+    V = svd.matrixV();
 
     // pseudo-inverse
     real_t max_S = 0;
     for (int i = 0; i < nsurf_; i++) {
-      max_S = fabs(S[i * nsurf_ + i]) > max_S ? fabs(S[i * nsurf_ + i]) : max_S;
+      max_S = fabs(S(i, i)) > max_S ? fabs(S(i, i)) : max_S;
     }
     for (int i = 0; i < nsurf_; i++) {
-      S[i * nsurf_ + i] =
-          S[i * nsurf_ + i] > EPS * max_S * 4 ? 1.0 / S[i * nsurf_ + i] : 0.0;
+      S(i, i) = S(i, i) > EPS * max_S * 4 ? 1.0 / S(i, i) : 0.0;
     }
-    ComplexVec S_(nsurf_ * nsurf_);
-    for (size_t i = 0; i < S_.size(); i++) {  // convert S to complex type
-      S_[i] = S[i];
-    }
-    ComplexVec V = conjugate_transpose(VH, nsurf_, nsurf_);
-    ComplexVec UH = conjugate_transpose(U, nsurf_, nsurf_);
+    matrix_t S_(S);  // convert S to complex type
+    auto UH = U.transpose().conjugate();
+    // gemm(nsurf_, nsurf_, nsurf_, &V[0], &S_[0], &(matrix_UC2E_V[level][0]));
+    // matrix_DC2E_U[level] = transpose(V, nsurf_, nsurf_);
+    // ComplexVec UHT = transpose(UH, nsurf_, nsurf_);
+    // gemm(nsurf_, nsurf_, nsurf_, &UHT[0], &S_[0],
+    // &(matrix_DC2E_V[level][0]));
+
     matrix_UC2E_U[level] = UH;
-    gemm(nsurf_, nsurf_, nsurf_, &V[0], &S_[0], &(matrix_UC2E_V[level][0]));
-    matrix_DC2E_U[level] = transpose(V, nsurf_, nsurf_);
-    ComplexVec UHT = transpose(UH, nsurf_, nsurf_);
-    gemm(nsurf_, nsurf_, nsurf_, &UHT[0], &S_[0], &(matrix_DC2E_V[level][0]));
+    matrix_UC2E_V[level] = V * S;
+    matrix_DC2E_U[level] = V.transpose();
+    auto UHT = UH.transpose();
+    matrix_DC2E_V[level] = UHT * S;
   }
 }
 

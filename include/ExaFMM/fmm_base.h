@@ -12,6 +12,7 @@
 #ifndef INCLUDE_EXAFMM_FMM_BASE_H_
 #define INCLUDE_EXAFMM_FMM_BASE_H_
 
+#include <Eigen/Dense>
 #include <algorithm>  // std::fill
 
 #include "exafmm.h"
@@ -75,6 +76,22 @@ class FmmBase {
    * @param trg_coord Vector of target coordinates.
    * @param matrix Kernel matrix.
    */
+  void kernel_matrix(RealVec& src_coord, RealVec& trg_coord,
+                     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& matrix) {
+    std::vector<T> src_value(1,
+                             1.);  // use unit weight to generate kernel matrix
+    int nsrcs = src_coord.size() / 3;
+    int ntrgs = trg_coord.size() / 3;
+#pragma omp parallel for
+    for (int i = 0; i < nsrcs; i++) {
+      RealVec src_coord_(src_coord.data() + 3 * i,
+                         src_coord.data() + 3 * (i + 1));
+      std::vector<T> trg_value_(ntrgs, 0.);
+      potential_P2P(src_coord_, src_value, trg_coord, trg_value_);
+      std::copy(trg_value_.begin(), trg_value_.end(),
+                matrix.data() + i * ntrgs);
+    }
+  }
   void kernel_matrix(RealVec& src_coord, RealVec& trg_coord,
                      std::vector<T>& matrix) {
     std::vector<T> src_value(1,
