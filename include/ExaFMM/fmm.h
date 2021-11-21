@@ -15,27 +15,36 @@
 #include <Eigen/Dense>
 #include <Eigen/SVD>
 #include <cassert>
-#include <cstring>      // std::memset
-#include <fstream>      // std::ofstream
+#include <cstring>  // std::memset
+#include <fstream>  // std::ofstream
+#include <numeric>
 #include <type_traits>  // std::is_same
 
 #include "fmm_base.h"
 #include "intrinsics.h"
-#include "math_wrapper.h"
 
 namespace ExaFMM {
 
 template <typename T>
 class Fmm : public FmmBase<T> {
-  using matrix_t = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
+  using matrix_t =
+      Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
   using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1>;
 
  public:
-  /* precomputation matrices */
+  /** Vectors of precomputed matrices.
+   *
+   * U matrices are ...
+   * D matrices are ...
+   * C2E indicates ...
+   * Subscript U indicates ...
+   * Subscript V indicates ...
+   **/
   std::vector<matrix_t> matrix_UC2E_U;
   std::vector<matrix_t> matrix_UC2E_V;
   std::vector<matrix_t> matrix_DC2E_U;
   std::vector<matrix_t> matrix_DC2E_V;
+
   std::vector<std::vector<matrix_t>> matrix_M2M;
   std::vector<std::vector<matrix_t>> matrix_L2L;
 
@@ -72,7 +81,7 @@ class Fmm : public FmmBase<T> {
     real_t parent_coord[3] = {0, 0, 0};
     for (int level = 0; level <= this->depth; level++) {
       RealVec parent_up_check_surf =
-          surface(this->p, this->r0, level, parent_coord, 2.95);
+          box_surface_coordinates(this->p, this->r0, level, parent_coord, 2.95);
       real_t s = this->r0 * powf(0.5, level + 1);
       int npos = REL_COORD[M2M_Type].size();  // number of relative positions
 #pragma omp parallel for
@@ -82,8 +91,8 @@ class Fmm : public FmmBase<T> {
         real_t child_coord[3] = {parent_coord[0] + coord[0] * s,
                                  parent_coord[1] + coord[1] * s,
                                  parent_coord[2] + coord[2] * s};
-        RealVec child_up_equiv_surf =
-            surface(this->p, this->r0, level + 1, child_coord, 1.05);
+        RealVec child_up_equiv_surf = box_surface_coordinates(
+            this->p, this->r0, level + 1, child_coord, 1.05);
         matrix_t matrix_pc2ce(nsurf_, nsurf_);
         this->kernel_matrix(parent_up_check_surf, child_up_equiv_surf,
                             matrix_pc2ce);
@@ -96,9 +105,6 @@ class Fmm : public FmmBase<T> {
       }
     }
   }
-
-  //! Precompute UC2UE and DC2DE matrices
-  void precompute_check2equiv() {}
 
   //! Precompute M2L
   void precompute_M2L(std::ofstream& file) {}
@@ -174,7 +180,7 @@ class Fmm : public FmmBase<T> {
   //! Precompute
   void precompute() {
     initialize_matrix();
-    load_matrix();
+    // load_matrix();
     if (!this->is_precomputed) {
       precompute_check2equiv();
       precompute_M2M();
@@ -194,7 +200,8 @@ class Fmm : public FmmBase<T> {
     up_check_surf.resize(this->depth + 1);
     for (int level = 0; level <= this->depth; level++) {
       up_check_surf[level].resize(nsurf_ * 3);
-      up_check_surf[level] = surface(this->p, this->r0, level, c, 2.95);
+      up_check_surf[level] =
+          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
     }
 #pragma omp parallel for
     for (long long int i = 0; i < leafs.size(); i++) {
@@ -211,8 +218,8 @@ class Fmm : public FmmBase<T> {
                           leaf->up_equiv);
       using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
       eigen_vec_t eigenUpEquiv(&(leaf->up_equiv[0]), nsurf_);
-      auto buffer = matrix_UC2E_U[level] * eigenUpEquiv;
-      auto equiv = matrix_UC2E_V[level] * buffer;
+      Eigen::Matrix<T, Eigen::Dynamic, 1> equiv =
+          matrix_UC2E_V[level] * matrix_UC2E_U[level] * eigenUpEquiv;
       for (int k = 0; k < nsurf_; k++) {
         leaf->up_equiv[k] = equiv[k];
       }
@@ -227,7 +234,8 @@ class Fmm : public FmmBase<T> {
     dn_equiv_surf.resize(this->depth + 1);
     for (int level = 0; level <= this->depth; level++) {
       dn_equiv_surf[level].resize(nsurf_ * 3);
-      dn_equiv_surf[level] = surface(this->p, this->r0, level, c, 2.95);
+      dn_equiv_surf[level] =
+          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
     }
 #pragma omp parallel for
     for (long long i = 0; i < leafs.size(); i++) {
@@ -236,8 +244,8 @@ class Fmm : public FmmBase<T> {
       // down check surface potential -> equivalent surface charge
       using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
       eigen_vec_t eigenDnEquiv(&(leaf->dn_equiv[0]), nsurf_);
-      auto buffer = matrix_DC2E_U[level] * eigenDnEquiv;
-      auto equiv = matrix_DC2E_V[level] * buffer;
+      Eigen::Matrix<T, Eigen::Dynamic, 1> equiv =
+          matrix_DC2E_V[level] * matrix_DC2E_U[level] * eigenDnEquiv;
       for (int k = 0; k < nsurf_; k++) {
         leaf->dn_equiv[k] = equiv[k];
       }
@@ -277,8 +285,6 @@ class Fmm : public FmmBase<T> {
 
   //! L2L operator
   void L2L(Node<T>* node) {
-    using eigen_mat_t =
-        Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>>;
     using eigen_vec_t = Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>>;
     int& nsurf_ = this->nsurf;
     if (node->is_leaf) return;
@@ -287,7 +293,8 @@ class Fmm : public FmmBase<T> {
         Node<T>* child = node->children[octant];
         int level = node->level;
         eigen_vec_t eigenDnEquiv(&(node->dn_equiv[0]), nsurf_);
-        auto buffer = matrix_L2L[level][octant] * eigenDnEquiv;
+        Eigen::Matrix<T, Eigen::Dynamic, 1> buffer =
+            matrix_L2L[level][octant] * eigenDnEquiv;
         for (int k = 0; k < nsurf_; k++) {
           child->dn_equiv[k] += buffer[k];
         }
@@ -507,96 +514,47 @@ class Fmm : public FmmBase<T> {
     }
     ifile.close();  // close ifstream
   }
+
+  /** Precompute UC2E and DC2E matrices.
+   *
+   * @note See Fong and Darve, Black-box fast multipole method 2009 for relevent
+   * literature.
+   **/
+  void precompute_check2equiv() {
+    real_t c[3] = {0, 0, 0};
+    int nsurf_ = this->nsurf;
+#pragma omp parallel for
+    for (int level = 0; level <= this->depth; ++level) {
+      // compute kernel matrix
+      RealVec up_check_surf =
+          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
+      RealVec up_equiv_surf =
+          box_surface_coordinates(this->p, this->r0, level, c, 1.05);
+      matrix_t S_inv = matrix_t::Zero(nsurf_, nsurf_),
+               matrix_c2e = matrix_t::Zero(nsurf_, nsurf_);
+      this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
+      Eigen::JacobiSVD<matrix_t> svd(matrix_c2e,
+                                     Eigen::ComputeThinU | Eigen::ComputeThinV);
+      auto singularDiag = svd.singularValues();
+      auto U = svd.matrixU();
+      auto V = svd.matrixV();
+      // pseudo-inverse, removing negligible terms.
+      real_t max_S = std::reduce(singularDiag.data(),
+                                 singularDiag.data() + singularDiag.size(), 0.,
+                                 [](auto a1, auto a2) {
+                                   return std::max(std::abs(a1), std::abs(a2));
+                                 });
+      for (int i = 0; i < nsurf_; i++) {
+        S_inv(i, i) =
+            singularDiag(i) > EPS * max_S * 4 ? 1.0 / singularDiag(i) : 0.0;
+      }
+      matrix_UC2E_U[level] = U.adjoint();
+      matrix_UC2E_V[level] = V * S_inv;
+      matrix_DC2E_U[level] = V.transpose();
+      matrix_DC2E_V[level] = U.conjugate() * S_inv;
+    }
+  }
 };
-
-/** Below are member function specializations
- */
-template <>
-void Fmm<real_t>::precompute_check2equiv() {
-  real_t c[3] = {0, 0, 0};
-  int& nsurf_ = this->nsurf;
-#pragma omp parallel for
-  for (int level = 0; level <= this->depth; ++level) {
-    // compute kernel matrix
-    using eigen_mat_t =
-        Eigen::Map<Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic>>;
-    RealVec up_check_surf = surface(this->p, this->r0, level, c, 2.95);
-    RealVec up_equiv_surf = surface(this->p, this->r0, level, c, 1.05);
-
-    // svd
-    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> S(nsurf_, nsurf_),
-        matrix_c2e(nsurf_, nsurf);
-    this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
-    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> U(nsurf_, nsurf_),
-        V(nsurf_, nsurf_);
-    Eigen::BDCSVD<decltype(matrix_c2e)> svd(
-        matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    S = svd.singularValues();
-    U = svd.matrixU();
-    V = svd.matrixV();
-    // svd(nsurf_, nsurf_, &matrix_c2e[0], &S[0], &U[0], &VT[0]);
-
-    // pseudo-inverse
-    real_t max_S = 0;
-    for (int i = 0; i < nsurf_; i++) {
-      max_S = std::abs(S(i, i)) > max_S ? std::abs(S(i, i)) : max_S;
-    }
-    for (int i = 0; i < nsurf_; i++) {
-      S(i, i) = S(i, i) > EPS * max_S * 4 ? 1.0 / S(i, i) : 0.0;
-    }
-
-    matrix_UC2E_U[level] = U.transpose();
-    matrix_UC2E_V[level] = V * S;
-    matrix_DC2E_U[level] = V.transpose();
-    matrix_DC2E_V[level] = U * S;
-  }
-}
-
-template <>
-void Fmm<complex_t>::precompute_check2equiv() {
-  real_t c[3] = {0, 0, 0};
-  int& nsurf_ = this->nsurf;
-#pragma omp parallel for
-  for (int level = 0; level <= this->depth; ++level) {
-    // compute kernel matrix
-    RealVec up_check_surf = surface(this->p, this->r0, level, c, 2.95);
-    RealVec up_equiv_surf = surface(this->p, this->r0, level, c, 1.05);
-    matrix_t matrix_c2e(nsurf_, nsurf_);  // UC2UE
-    this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
-
-    // svd
-    Eigen::Matrix<real_t, Eigen::Dynamic, Eigen::Dynamic> S(
-        nsurf_, nsurf_);  // singular values
-    matrix_t U(nsurf_, nsurf_), V(nsurf_, nsurf_);
-    Eigen::BDCSVD<decltype(matrix_c2e)> svd(
-        matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    S = svd.singularValues();
-    U = svd.matrixU();
-    V = svd.matrixV();
-
-    // pseudo-inverse
-    real_t max_S = 0;
-    for (int i = 0; i < nsurf_; i++) {
-      max_S = fabs(S(i, i)) > max_S ? fabs(S(i, i)) : max_S;
-    }
-    for (int i = 0; i < nsurf_; i++) {
-      S(i, i) = S(i, i) > EPS * max_S * 4 ? 1.0 / S(i, i) : 0.0;
-    }
-    matrix_t S_(S);  // convert S to complex type
-    auto UH = U.transpose().conjugate();
-    // gemm(nsurf_, nsurf_, nsurf_, &V[0], &S_[0], &(matrix_UC2E_V[level][0]));
-    // matrix_DC2E_U[level] = transpose(V, nsurf_, nsurf_);
-    // ComplexVec UHT = transpose(UH, nsurf_, nsurf_);
-    // gemm(nsurf_, nsurf_, nsurf_, &UHT[0], &S_[0],
-    // &(matrix_DC2E_V[level][0]));
-
-    matrix_UC2E_U[level] = UH;
-    matrix_UC2E_V[level] = V * S;
-    matrix_DC2E_U[level] = V.transpose();
-    auto UHT = UH.transpose();
-    matrix_DC2E_V[level] = UHT * S;
-  }
-}
 
 //! member function specialization for real type
 template <>

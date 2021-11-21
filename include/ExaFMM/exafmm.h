@@ -49,10 +49,10 @@ typedef fftwf_plan fft_plan;
 #define fft_destroy_plan fftwf_destroy_plan
 #define fft_flops fftwf_flops
 #else
-typedef double real_t;  //!< Real number type
+using real_t = double;  //!< Real number type
 const real_t EPS = 1e-16;
-typedef fftw_complex fft_complex;
-typedef fftw_plan fft_plan;
+using fft_complex = fftw_complex;
+using fft_plan = fftw_plan;
 #define fft_plan_dft fftw_plan_dft
 #define fft_plan_many_dft fftw_plan_many_dft
 #define fft_execute_dft fftw_execute_dft
@@ -66,7 +66,7 @@ typedef fftw_plan fft_plan;
 #endif
 
 const real_t PI = atan(1) * 4;           // M_PI;
-typedef std::complex<real_t> complex_t;  //!< Complex number type
+using complex_t = std::complex<real_t>;  //!< Complex number type
 typedef vec<3, int> ivec3;               //!< Vector of 3 int types
 typedef vec<3, real_t> vec3;             //!< Vector of 3 real_t types
 typedef vec<3, complex_t> cvec3;         //!< Vector of 3 complex_t types

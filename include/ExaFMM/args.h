@@ -83,7 +83,7 @@ class Args {
         distribution("cube"),
         k(20),
         maxlevel(5),
-        numBodies(100000),
+        numBodies(10000),
         P(4),
         threads(omp_get_max_threads()) {
     auto settings = docopt::docopt(docString, {argv + 1, argv + argc});

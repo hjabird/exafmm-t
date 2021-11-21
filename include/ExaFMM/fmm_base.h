@@ -69,43 +69,48 @@ class FmmBase {
   //! L2P operator.
   virtual void L2P(NodePtrs<T>& leafs) = 0;
 
-  /**
-   * @brief Compute the kernel matrix of a given kernel.
+  /** Compute the kernel matrix of a given kernel.
    *
-   * @param src_coord Vector of source coordinates.
-   * @param trg_coord Vector of target coordinates.
+   * The kernel matrix defines the interaction between the sources and the
+   * targets: targetVal = kernelMatrix * sourceStrength.
+   * This function evaluates the interaction kernel using unit source strength
+   * to obtain each value in the matrix.
+   *
+   * @param sourceCoord Vector of source coordinates.
+   * @param targetCoord Vector of target coordinates.
    * @param matrix Kernel matrix.
    */
-  void kernel_matrix(RealVec& src_coord, RealVec& trg_coord,
-                     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& matrix) {
-    std::vector<T> src_value(1,
-                             1.);  // use unit weight to generate kernel matrix
-    int nsrcs = src_coord.size() / 3;
-    int ntrgs = trg_coord.size() / 3;
+  void kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord,
+                     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic,
+                                   Eigen::RowMajor>& matrix) {
+    std::vector<T> sourceValue(1, static_cast<T>(1.));
+    int numSources = sourceCoord.size() / 3;
+    int numTargets = targetCoord.size() / 3;
+    // Evaluate matrix one row at a time.
 #pragma omp parallel for
-    for (int i = 0; i < nsrcs; i++) {
-      RealVec src_coord_(src_coord.data() + 3 * i,
-                         src_coord.data() + 3 * (i + 1));
-      std::vector<T> trg_value_(ntrgs, 0.);
-      potential_P2P(src_coord_, src_value, trg_coord, trg_value_);
-      std::copy(trg_value_.begin(), trg_value_.end(),
-                matrix.data() + i * ntrgs);
+    for (int i = 0; i < numSources; i++) {
+      RealVec sourceCoordinates(sourceCoord.data() + 3 * i,
+                                sourceCoord.data() + 3 * (i + 1));
+      std::vector<T> targetValue(numTargets, 0.);
+      potential_P2P(sourceCoordinates, sourceValue, targetCoord, targetValue);
+      matrix.row(i) = Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(
+          targetValue.data(), 1, numTargets);
     }
   }
-  void kernel_matrix(RealVec& src_coord, RealVec& trg_coord,
+  void kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord,
                      std::vector<T>& matrix) {
-    std::vector<T> src_value(1,
-                             1.);  // use unit weight to generate kernel matrix
-    int nsrcs = src_coord.size() / 3;
-    int ntrgs = trg_coord.size() / 3;
+    std::vector<T> sourceValue(1, static_cast<T>(1.));
+    int numSources = sourceCoord.size() / 3;
+    int numTargets = targetCoord.size() / 3;
+    // Evaluate matrix one row at a time.
 #pragma omp parallel for
-    for (int i = 0; i < nsrcs; i++) {
-      RealVec src_coord_(src_coord.data() + 3 * i,
-                         src_coord.data() + 3 * (i + 1));
-      std::vector<T> trg_value_(ntrgs, 0.);
-      potential_P2P(src_coord_, src_value, trg_coord, trg_value_);
-      std::copy(trg_value_.begin(), trg_value_.end(),
-                matrix.data() + i * ntrgs);
+    for (int i = 0; i < numSources; i++) {
+      RealVec sourceCoord(sourceCoord.data() + 3 * i,
+                          sourceCoord.data() + 3 * (i + 1));
+      std::vector<T> targetValue(numTargets, 0.);
+      potential_P2P(sourceCoord, sourceValue, targetCoord, targetValue);
+      std::copy(targetValue.begin(), targetValue.end(),
+                matrix.data() + i * numTargets);
     }
   }
 
@@ -135,7 +140,7 @@ class FmmBase {
     up_equiv_surf.resize(depth + 1);
     for (int level = 0; level <= depth; level++) {
       up_equiv_surf[level].resize(nsurf * 3);
-      up_equiv_surf[level] = surface(p, r0, level, c, 1.05);
+      up_equiv_surf[level] = box_surface_coordinates(p, r0, level, c, 1.05);
     }
 #pragma omp parallel for
     for (long long i = 0; i < targets.size(); i++) {
@@ -168,7 +173,7 @@ class FmmBase {
     dn_check_surf.resize(depth + 1);
     for (int level = 0; level <= depth; level++) {
       dn_check_surf[level].resize(nsurf * 3);
-      dn_check_surf[level] = surface(p, r0, level, c, 1.05);
+      dn_check_surf[level] = box_surface_coordinates(p, r0, level, c, 1.05);
     }
 #pragma omp parallel for
     for (long long i = 0; i < targets.size(); i++) {

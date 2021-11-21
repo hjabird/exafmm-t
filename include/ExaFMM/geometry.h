@@ -18,8 +18,12 @@ namespace ExaFMM {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
 // exafmm_t.h.
 
-/**
- * @brief Given a box, calculate the coordinates of surface points.
+/** Given a box, calculate the coordinates of surface points.
+ *
+ * Returns 6 (p-1)^2 + 2 coordinates:
+ *   * 8 for corners
+ *   * 12 * (p - 2) equispaced on the edges
+ *   * 6 * (p - 2) ^ 2 on remaining surface grid points.
  *
  * @param p Order of expansion.
  * @param r0 Half side length of the bounding box (root node).
@@ -31,52 +35,51 @@ namespace ExaFMM {
  *
  * @return Vector of coordinates of surface points.
  */
-RealVec surface(int p, real_t r0, int level, real_t* c, real_t alpha) {
+RealVec box_surface_coordinates(int p, real_t r0, int level, real_t* c,
+                                real_t alpha) {
+  using vector3D_t = Eigen::Matrix<real_t, 1, 3, Eigen::RowMajor>;
   int n = 6 * (p - 1) * (p - 1) + 2;
-  RealVec coord(n * 3);
-  coord[0] = -1.0;
-  coord[1] = -1.0;
-  coord[2] = -1.0;
+  Eigen::Matrix<real_t, Eigen::Dynamic, 3> coords(n, 3);
+  coords.row(0) = vector3D_t{-1.0, -1.0, -1.0};
   int count = 1;
   for (int i = 0; i < p - 1; i++) {
     for (int j = 0; j < p - 1; j++) {
-      coord[count * 3] = -1.0;
-      coord[count * 3 + 1] = (2.0 * (i + 1) - p + 1) / (p - 1);
-      coord[count * 3 + 2] = (2.0 * j - p + 1) / (p - 1);
+      coords.row(count) = vector3D_t{-1.0, (2.0 * (i + 1) - p + 1) / (p - 1),
+                                     (2.0 * j - p + 1) / (p - 1)};
       count++;
     }
   }
   for (int i = 0; i < p - 1; i++) {
     for (int j = 0; j < p - 1; j++) {
-      coord[count * 3] = (2.0 * i - p + 1) / (p - 1);
-      coord[count * 3 + 1] = -1.0;
-      coord[count * 3 + 2] = (2.0 * (j + 1) - p + 1) / (p - 1);
+      coords.row(count) = vector3D_t{(2.0 * i - p + 1) / (p - 1), -1.0,
+                                     (2.0 * (j + 1) - p + 1) / (p - 1)};
       count++;
     }
   }
   for (int i = 0; i < p - 1; i++) {
     for (int j = 0; j < p - 1; j++) {
-      coord[count * 3] = (2.0 * (i + 1) - p + 1) / (p - 1);
-      coord[count * 3 + 1] = (2.0 * j - p + 1) / (p - 1);
-      coord[count * 3 + 2] = -1.0;
+      coords.row(count) = vector3D_t{(2.0 * (i + 1) - p + 1) / (p - 1),
+                                     (2.0 * j - p + 1) / (p - 1), -1.0};
       count++;
     }
   }
-  for (int i = 0; i < (n / 2) * 3; i++) {
-    coord[count * 3 + i] = -coord[i];
-  }
-  real_t r = r0 * powf(0.5, level);
+  // The reflection of all prior points for +ve side surfaces.
+  coords.bottomRows(n / 2) = -coords.topRows(n / 2);
+  // Scale the points from {2,2,2} size centred on {0,0,0} to desired size and
+  // location.
+  real_t r = r0 * std::pow(static_cast<real_t>(.5), level);
   real_t b = alpha * r;
-  for (int i = 0; i < n; i++) {
-    coord[i * 3 + 0] = coord[i * 3 + 0] * b + c[0];
-    coord[i * 3 + 1] = coord[i * 3 + 1] * b + c[1];
-    coord[i * 3 + 2] = coord[i * 3 + 2] * b + c[2];
+  coords *= b;
+  coords.rowwise() += Eigen::Map<vector3D_t>(c);
+  // To keep interface consistent use RealVec as return type for now.
+  RealVec output(n * 3);
+  for (int i = 0; i < n * 3; ++i) {
+    output[i] = coords(i);
   }
-  return coord;
+  return output;
 }
 
-/**
- * @brief Generate the convolution grid of a given box.
+/** Generate the convolution grid of a given box.
  *
  * @param p Order of expansion.
  * @param r0 Half side length of the bounding box (root node).
@@ -104,9 +107,7 @@ RealVec convolution_grid(int p, real_t r0, int level, real_t* c) {
   return grid;
 }
 
-/**
- * @brief Generate the mapping from surface points to convolution grid used in
- * FFT.
+/** Generate the mapping from surface points to convolution grid used in FFT.
  *
  * @param p Order of expansion.
  *
@@ -117,7 +118,7 @@ std::vector<int> generate_surf2conv_up(int p) {
   int n1 = 2 * p;
   real_t c[3];
   for (int d = 0; d < 3; d++) c[d] = 0.5 * (p - 1);
-  RealVec surf = surface(p, 0.5, 0, c, real_t(p - 1));
+  RealVec surf = box_surface_coordinates(p, 0.5, 0, c, real_t(p - 1));
   std::vector<int> map(6 * (p - 1) * (p - 1) + 2);
   for (size_t i = 0; i < map.size(); i++) {
     map[i] = (int)(p - 1 - surf[i * 3]) +
@@ -140,7 +141,7 @@ std::vector<int> generate_surf2conv_dn(int p) {
   int n1 = 2 * p;
   real_t c[3];
   for (int d = 0; d < 3; d++) c[d] = 0.5 * (p - 1);
-  RealVec surf = surface(p, 0.5, 0, c, real_t(p - 1));
+  RealVec surf = box_surface_coordinates(p, 0.5, 0, c, real_t(p - 1));
   std::vector<int> map(6 * (p - 1) * (p - 1) + 2);
   for (size_t i = 0; i < map.size(); i++) {
     map[i] = (int)(2 * p - 1 - surf[i * 3]) +
@@ -150,8 +151,7 @@ std::vector<int> generate_surf2conv_dn(int p) {
   return map;
 }
 
-/**
- * @brief Compute the hash value of a relative position (coordinates).
+/** Compute the hash value of a relative position (coordinates).
  *
  * @param coord Coordinates that represent a relative position.
  *
@@ -162,8 +162,7 @@ int hash(ivec3& coord) {
   return ((coord[2] + n) * (2 * n) + (coord[1] + n)) * (2 * n) + (coord[0] + n);
 }
 
-/**
- * @brief Compute the coordinates of possible relative positions for operator t.
+/** Compute the coordinates of possible relative positions for operator t.
  *
  * @param max_r Max range.
  * @param min_r Min range.
