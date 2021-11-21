@@ -93,9 +93,8 @@ class Fmm : public FmmBase<T> {
                                  parent_coord[2] + coord[2] * s};
         RealVec child_up_equiv_surf = box_surface_coordinates(
             this->p, this->r0, level + 1, child_coord, 1.05);
-        matrix_t matrix_pc2ce(nsurf_, nsurf_);
-        this->kernel_matrix(parent_up_check_surf, child_up_equiv_surf,
-                            matrix_pc2ce);
+        matrix_t matrix_pc2ce =
+            this->kernel_matrix(parent_up_check_surf, child_up_equiv_surf);
         // M2M
         matrix_M2M[level][i] =
             matrix_UC2E_V[level] * matrix_UC2E_U[level] * matrix_pc2ce;
@@ -530,11 +529,9 @@ class Fmm : public FmmBase<T> {
           box_surface_coordinates(this->p, this->r0, level, c, 2.95);
       RealVec up_equiv_surf =
           box_surface_coordinates(this->p, this->r0, level, c, 1.05);
-      matrix_t S_inv = matrix_t::Zero(nsurf_, nsurf_),
-               matrix_c2e = matrix_t::Zero(nsurf_, nsurf_);
-      this->kernel_matrix(up_check_surf, up_equiv_surf, matrix_c2e);
-      Eigen::JacobiSVD<matrix_t> svd(matrix_c2e,
-                                     Eigen::ComputeThinU | Eigen::ComputeThinV);
+      matrix_t matrix_c2e = this->kernel_matrix(up_check_surf, up_equiv_surf);
+      Eigen::BDCSVD<matrix_t> svd(matrix_c2e,
+                                  Eigen::ComputeThinU | Eigen::ComputeThinV);
       auto singularDiag = svd.singularValues();
       auto U = svd.matrixU();
       auto V = svd.matrixV();
@@ -545,9 +542,10 @@ class Fmm : public FmmBase<T> {
                                    return std::max(std::abs(a1), std::abs(a2));
                                  });
       for (int i = 0; i < nsurf_; i++) {
-        S_inv(i, i) =
+        singularDiag(i) =
             singularDiag(i) > EPS * max_S * 4 ? 1.0 / singularDiag(i) : 0.0;
       }
+      auto S_inv = singularDiag.asDiagonal();
       matrix_UC2E_U[level] = U.adjoint();
       matrix_UC2E_V[level] = V * S_inv;
       matrix_DC2E_U[level] = V.transpose();
@@ -586,10 +584,10 @@ void Fmm<real_t>::precompute_M2L(std::ofstream& file) {
       }
       RealVec conv_coord =
           convolution_grid(this->p, this->r0, l, coord);  // convolution grid
-      RealVec conv_value(nconv_);  // potentials on convolution grid
-      this->kernel_matrix(conv_coord, trg_coord, conv_value);
+      // potentials on convolution grid
+      auto convValue = this->kernel_matrix(conv_coord, trg_coord);
       fft_execute_dft_r2c(
-          plan, conv_value.data(),
+          plan, convValue.data(),
           reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
     }
     // convert M2L_Helper to M2L and reorder data layout to improve locality
@@ -650,10 +648,10 @@ void Fmm<complex_t>::precompute_M2L(std::ofstream& file) {
       }
       RealVec conv_coord =
           convolution_grid(this->p, this->r0, l, coord);  // convolution grid
-      ComplexVec conv_value(nconv_);  // potentials on convolution grid
-      this->kernel_matrix(conv_coord, trg_coord, conv_value);
+      // potentials on convolution grid
+      auto convValue = this->kernel_matrix(conv_coord, trg_coord);
       fft_execute_dft(
-          plan, reinterpret_cast<fft_complex*>(conv_value.data()),
+          plan, reinterpret_cast<fft_complex*>(convValue.data()),
           reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
     }
     // convert M2L_Helper to M2L and reorder data layout to improve locality

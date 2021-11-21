@@ -76,16 +76,19 @@ class FmmBase {
    * This function evaluates the interaction kernel using unit source strength
    * to obtain each value in the matrix.
    *
+   * @tparam EigenIndexOrder Eigen::RowMajor or Eigen::ColumnMajor for output
+   * matrix.
    * @param sourceCoord Vector of source coordinates.
    * @param targetCoord Vector of target coordinates.
-   * @param matrix Kernel matrix.
+   * @return matrix Kernel matrix.
    */
-  void kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord,
-                     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic,
-                                   Eigen::RowMajor>& matrix) {
+  auto kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord) {
     std::vector<T> sourceValue(1, static_cast<T>(1.));
     int numSources = sourceCoord.size() / 3;
     int numTargets = targetCoord.size() / 3;
+    using return_t =
+        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    return_t kernelMatrix = return_t::Zero(numSources, numTargets);
     // Evaluate matrix one row at a time.
 #pragma omp parallel for
     for (int i = 0; i < numSources; i++) {
@@ -93,25 +96,10 @@ class FmmBase {
                                 sourceCoord.data() + 3 * (i + 1));
       std::vector<T> targetValue(numTargets, 0.);
       potential_P2P(sourceCoordinates, sourceValue, targetCoord, targetValue);
-      matrix.row(i) = Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(
+      kernelMatrix.row(i) = Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(
           targetValue.data(), 1, numTargets);
     }
-  }
-  void kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord,
-                     std::vector<T>& matrix) {
-    std::vector<T> sourceValue(1, static_cast<T>(1.));
-    int numSources = sourceCoord.size() / 3;
-    int numTargets = targetCoord.size() / 3;
-    // Evaluate matrix one row at a time.
-#pragma omp parallel for
-    for (int i = 0; i < numSources; i++) {
-      RealVec sourceCoord(sourceCoord.data() + 3 * i,
-                          sourceCoord.data() + 3 * (i + 1));
-      std::vector<T> targetValue(numTargets, 0.);
-      potential_P2P(sourceCoord, sourceValue, targetCoord, targetValue);
-      std::copy(targetValue.begin(), targetValue.end(),
-                matrix.data() + i * numTargets);
-    }
+    return kernelMatrix;
   }
 
   /* the following kernels do not use precomputation matrices
@@ -198,8 +186,7 @@ class FmmBase {
     }
   }
 
-  /**
-   * @brief Evaluate upward equivalent charges for all nodes in a post-order
+  /** Evaluate upward equivalent charges for all nodes in a post-order
    * traversal.
    *
    * @param nodes Vector of all nodes.
@@ -216,8 +203,7 @@ class FmmBase {
     stop("M2M", verbose);
   }
 
-  /**
-   * @brief Evaluate potentials and gradients for all targets in a pre-order
+  /** Evaluate potentials and gradients for all targets in a pre-order
    * traversal.
    *
    * @param nodes Vector of all nodes.
@@ -246,8 +232,7 @@ class FmmBase {
     stop("L2P", verbose);
   }
 
-  /**
-   * @brief Check FMM accuracy.
+  /** Check FMM accuracy.
    *
    * @param leafs Vector of leaves.
    * @return The relative error of potential and gradient in L2 norm.
