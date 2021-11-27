@@ -42,8 +42,9 @@ int main(int argc, char **argv) {
 
   start("Build Tree");
   get_bounds(sources, targets, fmm.x0, fmm.r0);
-  NodePtrs<complex_t> leafs, nonleafs;
-  Nodes<complex_t> nodes = build_tree(sources, targets, leafs, nonleafs, fmm);
+  HelmholtzFmm::nodeptrvec_t leafs, nonleafs;
+  HelmholtzFmm::nodevec_t nodes =
+      build_tree(sources, targets, leafs, nonleafs, fmm);
   stop("Build Tree");
 
   init_rel_coord();

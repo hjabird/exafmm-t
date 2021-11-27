@@ -21,8 +21,14 @@
 
 namespace ExaFMM {
 //! Base FMM class
-template <typename T>
+template <typename PotentialT>
 class FmmBase {
+  using potential_t = PotentialT;
+
+  using node_t = typename Node<potential_t>;
+  using nodevec_t = typename std::vector<node_t>;
+  using nodeptrvec_t = typename std::vector<node_t*>;
+
  public:
   int p;      //!< Order of expansion
   int nsurf;  //!< Number of points on equivalent / check surface
@@ -44,30 +50,34 @@ class FmmBase {
     nsurf = 6 * (p_ - 1) * (p_ - 1) + 2;
     int n1 = 2 * p_;
     nconv = n1 * n1 * n1;
-    is_real = std::is_same<T, real_t>::value;
+    is_real = std::is_same<potential_t, real_t>::value;
     nfreq = is_real ? n1 * n1 * (n1 / 2 + 1) : nconv;
     is_precomputed = false;
   }
 
-  virtual void potential_P2P(RealVec& src_coord, std::vector<T>& src_value,
-                             RealVec& trg_coord, std::vector<T>& trg_value) = 0;
+  virtual void potential_P2P(RealVec& src_coord,
+                             std::vector<potential_t>& src_value,
+                             RealVec& trg_coord,
+                             std::vector<potential_t>& trg_value) = 0;
 
-  virtual void gradient_P2P(RealVec& src_coord, std::vector<T>& src_value,
-                            RealVec& trg_coord, std::vector<T>& trg_value) = 0;
+  virtual void gradient_P2P(RealVec& src_coord,
+                            std::vector<potential_t>& src_value,
+                            RealVec& trg_coord,
+                            std::vector<potential_t>& trg_value) = 0;
   //! M2L operator.
-  virtual void M2L(Nodes<T>& nodes) = 0;
+  virtual void M2L(nodevec_t& nodes) = 0;
 
   //! M2M operator.
-  virtual void M2M(Node<T>* node) = 0;
+  virtual void M2M(node_t* node) = 0;
 
   //! L2L operator.
-  virtual void L2L(Node<T>* node) = 0;
+  virtual void L2L(node_t* node) = 0;
 
   //! P2M operator.
-  virtual void P2M(NodePtrs<T>& leafs) = 0;
+  virtual void P2M(nodeptrvec_t& leafs) = 0;
 
   //! L2P operator.
-  virtual void L2P(NodePtrs<T>& leafs) = 0;
+  virtual void L2P(nodeptrvec_t& leafs) = 0;
 
   /** Compute the kernel matrix of a given kernel.
    *
@@ -83,21 +93,22 @@ class FmmBase {
    * @return matrix Kernel matrix.
    */
   auto kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord) {
-    std::vector<T> sourceValue(1, static_cast<T>(1.));
+    std::vector<potential_t> sourceValue(1, static_cast<potential_t>(1.));
     int numSources = sourceCoord.size() / 3;
     int numTargets = targetCoord.size() / 3;
-    using return_t =
-        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    using return_t = Eigen::Matrix<potential_t, Eigen::Dynamic, Eigen::Dynamic,
+                                   Eigen::RowMajor>;
     return_t kernelMatrix = return_t::Zero(numSources, numTargets);
     // Evaluate matrix one row at a time.
 #pragma omp parallel for
     for (int i = 0; i < numSources; i++) {
       RealVec sourceCoordinates(sourceCoord.data() + 3 * i,
                                 sourceCoord.data() + 3 * (i + 1));
-      std::vector<T> targetValue(numTargets, 0.);
+      std::vector<potential_t> targetValue(numTargets, 0.);
       potential_P2P(sourceCoordinates, sourceValue, targetCoord, targetValue);
-      kernelMatrix.row(i) = Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>>(
-          targetValue.data(), 1, numTargets);
+      kernelMatrix.row(i) =
+          Eigen::Map<Eigen::Matrix<potential_t, 1, Eigen::Dynamic>>(
+              targetValue.data(), 1, numTargets);
     }
     return kernelMatrix;
   }
@@ -106,14 +117,14 @@ class FmmBase {
    * thus can be defined in the base class */
 
   //! P2P operator.
-  void P2P(NodePtrs<T>& leafs) {
-    NodePtrs<T>& targets = leafs;
+  void P2P(nodeptrvec_t& leafs) {
+    nodeptrvec_t& targets = leafs;
 #pragma omp parallel for
     for (long long i = 0; i < targets.size(); i++) {
-      Node<T>* target = targets[i];
-      NodePtrs<T>& sources = target->P2P_list;
+      node_t* target = targets[i];
+      nodeptrvec_t& sources = target->P2P_list;
       for (size_t j = 0; j < sources.size(); j++) {
-        Node<T>* source = sources[j];
+        node_t* source = sources[j];
         gradient_P2P(source->src_coord, source->src_value, target->trg_coord,
                      target->trg_value);
       }
@@ -121,8 +132,8 @@ class FmmBase {
   }
 
   //! M2P operator.
-  void M2P(NodePtrs<T>& leafs) {
-    NodePtrs<T>& targets = leafs;
+  void M2P(nodeptrvec_t& leafs) {
+    nodeptrvec_t& targets = leafs;
     real_t c[3] = {0.0};
     std::vector<RealVec> up_equiv_surf;
     up_equiv_surf.resize(depth + 1);
@@ -132,10 +143,10 @@ class FmmBase {
     }
 #pragma omp parallel for
     for (long long i = 0; i < targets.size(); i++) {
-      Node<T>* target = targets[i];
-      NodePtrs<T>& sources = target->M2P_list;
+      node_t* target = targets[i];
+      nodeptrvec_t& sources = target->M2P_list;
       for (size_t j = 0; j < sources.size(); j++) {
-        Node<T>* source = sources[j];
+        node_t* source = sources[j];
         RealVec src_equiv_coord(nsurf * 3);
         int level = source->level;
         // source node's equiv coord = relative equiv coord + node's center
@@ -154,8 +165,8 @@ class FmmBase {
   }
 
   //! P2L operator.
-  void P2L(Nodes<T>& nodes) {
-    Nodes<T>& targets = nodes;
+  void P2L(nodevec_t& nodes) {
+    nodevec_t& targets = nodes;
     real_t c[3] = {0.0};
     std::vector<RealVec> dn_check_surf;
     dn_check_surf.resize(depth + 1);
@@ -165,10 +176,10 @@ class FmmBase {
     }
 #pragma omp parallel for
     for (long long i = 0; i < targets.size(); i++) {
-      Node<T>* target = &targets[i];
-      NodePtrs<T>& sources = target->P2L_list;
+      node_t* target = &targets[i];
+      nodeptrvec_t& sources = target->P2L_list;
       for (size_t j = 0; j < sources.size(); j++) {
-        Node<T>* source = sources[j];
+        node_t* source = sources[j];
         RealVec trg_check_coord(nsurf * 3);
         int level = target->level;
         // target node's check coord = relative check coord + node's center
@@ -192,7 +203,7 @@ class FmmBase {
    * @param nodes Vector of all nodes.
    * @param leafs Vector of pointers to leaf nodes.
    */
-  void upward_pass(Nodes<T>& nodes, NodePtrs<T>& leafs, bool verbose = true) {
+  void upward_pass(nodevec_t& nodes, nodeptrvec_t& leafs, bool verbose = true) {
     start("P2M");
     P2M(leafs);
     stop("P2M", verbose);
@@ -209,7 +220,8 @@ class FmmBase {
    * @param nodes Vector of all nodes.
    * @param leafs Vector of pointers to leaf nodes.
    */
-  void downward_pass(Nodes<T>& nodes, NodePtrs<T>& leafs, bool verbose = true) {
+  void downward_pass(nodevec_t& nodes, nodeptrvec_t& leafs,
+                     bool verbose = true) {
     start("P2L");
     P2L(nodes);
     stop("P2L", verbose);
@@ -237,8 +249,8 @@ class FmmBase {
    * @param leafs Vector of leaves.
    * @return The relative error of potential and gradient in L2 norm.
    */
-  RealVec verify(NodePtrs<T>& leafs, bool sample = false) {
-    Nodes<T> targets;  // vector of target nodes
+  RealVec verify(nodeptrvec_t& leafs, bool sample = false) {
+    nodevec_t targets;  // vector of target nodes
     if (sample) {
       int nsamples = 10;
       int stride = leafs.size() / nsamples;
@@ -251,10 +263,10 @@ class FmmBase {
       }
     }
 
-    Nodes<T> targets2 = targets;  // target2 is used for direct summation
+    nodevec_t targets2 = targets;  // target2 is used for direct summation
 #pragma omp parallel for
     for (long long int i = 0; i < targets2.size(); i++) {
-      Node<T>* target = &targets2[i];
+      node_t* target = &targets2[i];
       std::fill(target->trg_value.begin(), target->trg_value.end(), 0.);
       for (size_t j = 0; j < leafs.size(); j++) {
         gradient_P2P(leafs[j]->src_coord, leafs[j]->src_value,

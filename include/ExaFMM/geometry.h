@@ -13,6 +13,7 @@
 #define INCLUDE_EXAFMM_GEOMETRY_H_
 
 #include "exafmm.h"
+#include "predefines.h"
 
 namespace ExaFMM {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
@@ -37,6 +38,10 @@ namespace ExaFMM {
  */
 RealVec box_surface_coordinates(int p, real_t r0, int level, real_t* c,
                                 real_t alpha) {
+  EXAFMM_ASSERT(p > 0);
+  EXAFMM_ASSERT(r0 > 0);
+  EXAFMM_ASSERT(level >= 0);
+  EXAFMM_ASSERT(alpha > 0);
   using vector3D_t = Eigen::Matrix<real_t, 1, 3, Eigen::RowMajor>;
   int n = 6 * (p - 1) * (p - 1) + 2;
   Eigen::Matrix<real_t, Eigen::Dynamic, 3> coords(n, 3);
@@ -73,8 +78,10 @@ RealVec box_surface_coordinates(int p, real_t r0, int level, real_t* c,
   coords.rowwise() += Eigen::Map<vector3D_t>(c);
   // To keep interface consistent use RealVec as return type for now.
   RealVec output(n * 3);
-  for (int i = 0; i < n * 3; ++i) {
-    output[i] = coords(i);
+  for (int i = 0; i < n; ++i) {
+    output[i * 3 + 0] = coords(i, 0);
+    output[i * 3 + 1] = coords(i, 1);
+    output[i * 3 + 2] = coords(i, 2);
   }
   return output;
 }
@@ -89,6 +96,10 @@ RealVec box_surface_coordinates(int p, real_t r0, int level, real_t* c,
  * @return Vector of coordinates of convolution grid.
  */
 RealVec convolution_grid(int p, real_t r0, int level, real_t* c) {
+  EXAFMM_ASSERT(p > 0);
+  EXAFMM_ASSERT(r0 > 0);
+  EXAFMM_ASSERT(level >= 0);
+
   real_t d = 2 * r0 * std::pow(0.5, level);
   real_t a = d * 1.05;  // side length of upward equivalent/downward check box
   int n1 = p * 2;
@@ -115,6 +126,7 @@ RealVec convolution_grid(int p, real_t r0, int level, real_t* c) {
  * grid index.
  */
 std::vector<int> generate_surf2conv_up(int p) {
+  EXAFMM_ASSERT(p > 0);
   int n1 = 2 * p;
   real_t c[3];
   for (int d = 0; d < 3; d++) c[d] = 0.5 * (p - 1);
