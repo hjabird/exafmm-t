@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
 
   start("Total");
   complex_t wavek(5, 10);
-  HelmholtzFmm fmm(args.P, args.ncrit, wavek);
+  HelmholtzFmm fmm(args.P, args.ncrit, {wavek});
 #if NON_ADAPTIVE
   fmm.depth = args.maxlevel;
 #endif

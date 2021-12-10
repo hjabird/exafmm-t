@@ -15,12 +15,14 @@
 #include <fftw3.h>
 #include <omp.h>
 
+#include <Eigen/Dense>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <complex>
 #include <iostream>
 #include <set>
+#include <type_traits>
 #include <vector>
 
 #include "align.h"
@@ -28,6 +30,86 @@
 #include "vec.h"
 
 namespace ExaFMM {
+
+/// Use row-major memory order. Like C.
+constexpr int row_major = Eigen::RowMajor;
+/// Use column-major memory order. Like fortran.
+constexpr int column_major = Eigen::ColMajor;
+/// Describes resizable matrices.
+constexpr int dynamic = Eigen::Dynamic;
+
+/** Helper class to find whether a type is complex.
+ *
+ * @tparam T The type to test is std::complex.
+ **/
+template <typename T>
+class is_complex : public std::false_type {};
+
+template <typename T>
+class is_complex<std::complex<T>> : public std::true_type {};
+
+/** The value_type of a real or complex type.
+ *
+ * @tparam T The type to get the value real type of.
+ **/
+template <typename T>
+class real_type_of {
+ public:
+  using type = T;
+};
+
+template <typename T>
+class real_type_of<std::complex<T>> {
+ public:
+  using type = T;
+};
+
+/** Traits needed for an FMM with given potential type.
+ *
+ * @tparam PotentialT The type of the potential.
+ **/
+template <typename PotentialT>
+class potential_traits {
+ public:
+  /// The type of the potential.
+  using potential_t = PotentialT;
+  /// A real type with the same precision as the potential_t.
+  using real_t = typename real_type_of<potential_t>::type;
+  /// A complex type with the same precision as the potential_t.
+  using complex_t = std::complex<real_t>;
+
+  /// True if the potential type is complex.
+  static constexpr bool isComplexPotential = is_complex<potential_t>::value;
+  /// The epsilon of the real_t.
+  static constexpr real_t epsilon = std::numeric_limits<real_t>::epsilon();
+
+  /// A matrix of the potential_t.
+  template <int Rows = dynamic, int Cols = dynamic, int RowOrder = row_major>
+  using potential_matrix_t =
+      typename Eigen::Matrix<potential_t, Rows, Cols, RowOrder>;
+  /// A vector of the potential_t.
+  template <int Rows = dynamic>
+  using potential_vector_t = typename Eigen::Matrix<potential_t, Rows, 1>;
+  /// A matrix of the real_t.
+  template <int Rows = dynamic, int Cols = dynamic, int RowOrder = row_major>
+  using real_matrix_t = typename Eigen::Matrix<real_t, Rows, Cols, RowOrder>;
+  /// A vector of the real_t.
+  template <int Rows = dynamic>
+  using real_vector_t = typename Eigen::Matrix<real_t, Rows, 1>;
+  /// A matrix of the complex_t.
+  template <int Rows = dynamic, int Cols = dynamic, int RowOrder = row_major>
+  using complex_matrix_t =
+      typename Eigen::Matrix<complex_t, Rows, Cols, RowOrder>;
+  /// A vector of the complex_t.
+  template <int Rows = dynamic>
+  using complex_vector_t = typename Eigen::Matrix<complex_t, Rows, 1>;
+
+  /// Coordinate vector.
+  using coord_t = typename Eigen::Matrix<potential_t, 3, 1>;
+  /// A vector (as in multiple) coordinates
+  template <int Rows = dynamic, int RowOrder = column_major>
+  using coord_matrix_t = typename Eigen::Matrix<real_t, Rows, 3, RowOrder>;
+};
 
 const int MEM_ALIGN = 64;
 const int CACHE_SIZE = 512;
@@ -114,38 +196,50 @@ using Bodies = std::vector<Body<T>>;  //!< Vector of nodes
  *
  * @tparam Value type of sources and targets (real or complex).
  */
-template <typename T>
-struct Node {
-  size_t idx;                   //!< Index in the octree
-  size_t idx_M2L;               //!< Index in global M2L interaction list
-  bool is_leaf;                 //!< Whether the node is leaf
-  int ntrgs;                    //!< Number of targets
-  int nsrcs;                    //!< Number of sources
-  vec3 x;                       //!< Coordinates of the center of the node
-  real_t r;                     //!< Radius of the node
-  uint64_t key;                 //!< Morton key
-  int level;                    //!< Level in the octree
-  int octant;                   //!< Octant
-  Node* parent;                 //!< Pointer to parent
-  std::vector<Node*> children;  //!< Vector of pointers to child nodes
-  std::vector<Node*>
+template <typename PotentialT>
+class Node {
+ private:
+  using pt = potential_traits<PotentialT>;
+
+ public:
+  using potential_t = PotentialT;
+  using real_t = typename pt::real_t;
+  using potential_vector_t = typename pt::potential_vector_t<>;
+  using coord_t = typename pt::coord_t;
+  using node_t = typename Node<potential_t>;
+  using nodeptrvec_t = std::vector<node_t*>;
+
+  size_t idx;             //!< Index in the octree
+  size_t idx_M2L;         //!< Index in global M2L interaction list
+  bool is_leaf;           //!< Whether the node is leaf
+  int ntrgs;              //!< Number of targets
+  int nsrcs;              //!< Number of sources
+  coord_t x;              //!< Coordinates of the center of the node
+  real_t r;               //!< Radius of the node
+  uint64_t key;           //!< Morton key
+  int level;              //!< Level in the octree
+  int octant;             //!< Octant
+  Node* parent;           //!< Pointer to parent
+  nodeptrvec_t children;  //!< Vector of pointers to child nodes
+  nodeptrvec_t
       P2L_list;  //!< Vector of pointers to nodes in P2L interaction list
-  std::vector<Node*>
+  nodeptrvec_t
       M2P_list;  //!< Vector of pointers to nodes in M2P interaction list
-  std::vector<Node*>
+  nodeptrvec_t
       P2P_list;  //!< Vector of pointers to nodes in P2P interaction list
-  std::vector<Node*>
+  nodeptrvec_t
       M2L_list;  //!< Vector of pointers to nodes in M2L interaction list
-  std::vector<int> isrcs;    //!< Vector of initial source numbering
-  std::vector<int> itrgs;    //!< Vector of initial target numbering
-  RealVec src_coord;         //!< Vector of coordinates of sources in the node
-  RealVec trg_coord;         //!< Vector of coordinates of targets in the node
-  std::vector<T> src_value;  //!< Vector of charges of sources in the node
-  std::vector<T>
+  std::vector<int> isrcs;  //!< Vector of initial source numbering
+  std::vector<int> itrgs;  //!< Vector of initial target numbering
+  RealVec src_coord;       //!< Vector of coordinates of sources in the node
+  RealVec trg_coord;       //!< Vector of coordinates of targets in the node
+  std::vector<potential_vector_t>
+      src_value;  //!< Vector of charges of sources in the node
+  std::vector<potential_vector_t>
       trg_value;  //!< Vector of potentials and gradients of targets in the node
-  std::vector<T>
+  typename potential_vector_t
       up_equiv;  //!< Upward check potentials / Upward equivalent densities
-  std::vector<T>
+  typename potential_vector_t
       dn_equiv;  //!< Downward check potentials / Downward equivalent densites
 };
 

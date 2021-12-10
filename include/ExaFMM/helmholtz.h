@@ -18,34 +18,30 @@
 #include "timer.h"
 
 namespace ExaFMM {
-//! A derived FMM class for Helmholtz kernel.
-class HelmholtzFmm : public Fmm<complex_t> {
+
+class HelmholtzFmmKernel;
+
+using HelmholtzFmm = Fmm<HelmholtzFmmKernel>;
+
+//! A class defining the kernel function for the Helmholtz FMM.
+class HelmholtzFmmKernel : public potential_traits<std::complex<double>> {
  public:
+  using potential_t = std::complex<double>;
+
+  // Argument types required for this kernel.
+  using kernel_args_t = std::tuple<complex_t>;
   complex_t wavek;  //!< Wave number k.
 
-  HelmholtzFmm() {}
-  HelmholtzFmm(int p_, int ncrit_, complex_t wavek_,
-               std::string filename_ = std::string())
-      : Fmm<complex_t>(p_, ncrit_, filename_) {
-    wavek = wavek_;
-    if (this->filename.empty()) {
-      this->filename = std::string("helmholtz_") +
-                       (std::is_same<real_t, float>::value ? "f" : "d") +
-                       std::string("_p") + std::to_string(p) +
-                       std::string(".dat");
-    }
-  }
+  HelmholtzFmmKernel() = delete;
 
-  /**
-   * @brief Compute potentials at targets induced by sources directly.
-   *
-   * @param src_coord Vector of coordinates of sources.
-   * @param src_value Vector of charges of sources.
-   * @param trg_coord Vector of coordinates of targets.
-   * @param trg_value Vector of potentials of targets.
-   */
-  void potential_P2P(RealVec& src_coord, ComplexVec& src_value,
-                     RealVec& trg_coord, ComplexVec& trg_value) {
+  HelmholtzFmmKernel(kernel_args_t kernelArgs)
+      : wavek{std::get<0>(kernelArgs)} {};
+
+  template <int NumSources, int NumTargets>
+  void potential_P2P(const RealVec& src_coord,
+                     const potential_vector_t<NumSources>& src_value,
+                     const RealVec& trg_coord,
+                     potential_vector_t<NumTargets>& trg_value) {
     simdvec zero((real_t)0);
     real_t newton_coef = 16;
     simdvec coef(real_t(1.0 / (4 * PI * newton_coef)));
@@ -68,8 +64,8 @@ class HelmholtzFmm : public Fmm<complex_t> {
         sy -= ty;
         simdvec sz(src_coord[3 * s + 2]);
         sz -= tz;
-        simdvec sv_real(src_value[s].real());
-        simdvec sv_imag(src_value[s].imag());
+        simdvec sv_real(src_value(s).real());
+        simdvec sv_imag(src_value(s).imag());
         simdvec r2(zero);
         r2 += sx * sx;
         r2 += sy * sy;
@@ -91,7 +87,7 @@ class HelmholtzFmm : public Fmm<complex_t> {
       tv_real *= coef;  // coef carries 1/(4*PI) and offsets newton_coef in invr
       tv_imag *= coef;
       for (int m = 0; m < NSIMD && (t + m) < ntrgs; m++) {
-        trg_value[t + m] += complex_t(tv_real[m], tv_imag[m]);
+        trg_value(t + m) += complex_t(tv_real[m], tv_imag[m]);
       }
     }
     for (; t < ntrgs; t++) {
@@ -103,10 +99,10 @@ class HelmholtzFmm : public Fmm<complex_t> {
         real_t r2 = norm(dx);
         if (r2 != 0) {
           real_t r = std::sqrt(r2);
-          potential += std::exp(I * r * wavek) * src_value[s] / r;
+          potential += std::exp(I * r * wavek) * src_value(s) / r;
         }
       }
-      trg_value[t] += potential / (4 * PI);
+      trg_value(t) += potential / (4 * PI);
     }
   }
 

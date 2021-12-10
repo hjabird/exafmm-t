@@ -18,7 +18,7 @@
 #include <unordered_set>
 
 #include "exafmm.h"
-#include "fmm_base.h"
+#include "fmm.h"
 #include "geometry.h"
 #include "hilbert.h"
 
@@ -126,7 +126,7 @@ bool is_adjacent(uint64_t key_a, uint64_t key_b) {
  * @param key2id The mapping from a node's key to its index in the tree.
  */
 template <typename T>
-void build_other_list(Node<T>* node, Nodes<T>& nodes, const FmmBase<T>& fmm,
+void build_other_list(Node<T>* node, Nodes<T>& nodes, const Fmm<T>& fmm,
                       const unordered_set<uint64_t>& leaf_keys,
                       const unordered_map<uint64_t, size_t>& key2id) {
   set<Node<T>*> P2P_set, M2P_set, P2L_set;
@@ -273,7 +273,7 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
  * @param fmm The FMM instance.
  */
 template <typename T>
-void build_list(Nodes<T>& nodes, const FmmBase<T>& fmm) {
+void build_list(Nodes<T>& nodes, const Fmm<T>& fmm) {
   unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
   unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
 #pragma omp parallel for schedule(dynamic)
