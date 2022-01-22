@@ -112,29 +112,44 @@ class Fmm : public FmmKernel {
    * This function evaluates the interaction kernel using unit source strength
    * to obtain each value in the matrix.
    *
-   * @param sourceCoord Vector of source coordinates.
+   * @param sourceCoords Vector of source coordinates.
    * @param targetCoord Vector of target coordinates.
    * @return matrix Kernel matrix.
    */
-  auto kernel_matrix(RealVec& sourceCoord, RealVec& targetCoord) {
-    auto sourceValue = potential_vector_t<1>::Ones();
-    int numSources = sourceCoord.size() / 3;
-    int numTargets = targetCoord.size() / 3;
-    using return_t = Eigen::Matrix<potential_t, Eigen::Dynamic, Eigen::Dynamic,
-                                   Eigen::RowMajor>;
+  template <int NumSources = dynamic>
+  auto kernel_matrix(const coord_matrix_t<NumSources>& sourceCoords,
+                     const coord_t& targetCoord) {
+    coord_matrix_t<1> targetCoords{targetCoord};
+    return kernel_matrix<NumSources, 1>(sourceCoords, targetCoord);
+  }
+
+  /** Compute the kernel matrix of a given kernel.
+   *
+   * The kernel matrix defines the interaction between the sources and the
+   * targets: targetVal = kernelMatrix * sourceStrength.
+   * This function evaluates the interaction kernel using unit source strength
+   * to obtain each value in the matrix.
+   *
+   * @param sourceCoords Vector of source coordinates.
+   * @param targetCoords Vector of target coordinates.
+   * @return matrix Kernel matrix.
+   */
+  template <int NumSources = dynamic, int NumTargets = dynamic>
+  auto kernel_matrix(const coord_matrix_t<NumSources>& sourceCoords,
+                     const coord_matrix_t<NumTargets>& targetCoords) {
+    const auto sourceValue = potential_vector_t<1>::Ones();
+    const int numSources = sourceCoords.rows();
+    const int numTargets = targetCoords.rows();
+    using return_t =
+        Eigen::Matrix<potential_t, NumSources, NumTargets, Eigen::RowMajor>;
     return_t kernelMatrix = return_t::Zero(numSources, numTargets);
-    // Evaluate matrix one row at a time.
-    //#pragma omp parallel for
-    for (int i = 0; i < numSources; i++) {
-      RealVec sourceCoordinates(sourceCoord.data() + 3 * i,
-                                sourceCoord.data() + 3 * (i + 1));
-      potential_vector_t<> targetValue(numTargets);
-      targetValue.setZero();
-      potential_P2P<1, dynamic>(sourceCoordinates, sourceValue, targetCoord,
-                                targetValue);
-      kernelMatrix.row(i) =
-          Eigen::Map<Eigen::Matrix<potential_t, 1, Eigen::Dynamic>>(
-              targetValue.data(), 1, numTargets);
+
+    for (size_t i{0}; i < numTargets; ++i) {
+      for (size_t j{0}; j < numSources; ++j) {
+        // Is row / column the correct way round?
+        kernelMatrix(i, j) =
+            potential_P2P(sourceCoords.row(j), targetCoords.row(i));
+      }
     }
     return kernelMatrix;
   }
@@ -457,13 +472,13 @@ class Fmm : public FmmKernel {
   //! P2M operator
   void P2M(nodeptrvec_t& leafs) {
     int& nsurf_ = this->nsurf;
-    real_t c[3] = {0, 0, 0};
-    std::vector<RealVec> up_check_surf;
+    coord_t c{0, 0, 0};
+    std::vector<coord_matrix_t<>> up_check_surf;
     up_check_surf.resize(this->depth + 1);
     for (int level = 0; level <= this->depth; level++) {
-      up_check_surf[level].resize(nsurf_ * 3);
-      up_check_surf[level] =
-          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
+      up_check_surf[level].resize(nsurf_, 3);
+      up_check_surf[level] = box_surface_coordinates<potential_t>(
+          this->p, this->r0, level, c, 2.95);
     }
 #pragma omp parallel for
     for (long long int i = 0; i < leafs.size(); i++) {
@@ -476,8 +491,8 @@ class Fmm : public FmmKernel {
         check_coord[3 * k + 1] = up_check_surf[level][3 * k + 1] + leaf->x[1];
         check_coord[3 * k + 2] = up_check_surf[level][3 * k + 2] + leaf->x[2];
       }
-      this->potential_P2P(leaf->src_coord, leaf->src_value, check_coord,
-                          leaf->up_equiv);
+      leaf->up_equiv =
+          this->potential_P2P(leaf->src_coord, leaf->src_value, check_coord);
       Eigen::Matrix<potential_t, Eigen::Dynamic, 1> equiv =
           matrix_UC2E_V[level] * matrix_UC2E_U[level] * leaf->up_equiv;
       for (int k = 0; k < nsurf_; k++) {
@@ -489,13 +504,13 @@ class Fmm : public FmmKernel {
   //! L2P operator
   void L2P(nodeptrvec_t& leafs) {
     int& nsurf_ = this->nsurf;
-    real_t c[3] = {0, 0, 0};
-    std::vector<RealVec> dn_equiv_surf;
+    coord_t c{0, 0, 0};
+    std::vector<coord_matrix_t<>> dn_equiv_surf;
     dn_equiv_surf.resize(this->depth + 1);
     for (int level = 0; level <= this->depth; level++) {
       dn_equiv_surf[level].resize(nsurf_ * 3);
-      dn_equiv_surf[level] =
-          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
+      dn_equiv_surf[level] = box_surface_coordinates<potential_t>(
+          this->p, this->r0, level, c, 2.95);
     }
 #pragma omp parallel for
     for (long long i = 0; i < leafs.size(); i++) {
@@ -766,15 +781,15 @@ class Fmm : public FmmKernel {
    * literature.
    **/
   void precompute_check2equiv() {
-    real_t c[3] = {0, 0, 0};
+    coord_t boxCentre = coord_t::Zero(3);
     int nsurf_ = this->nsurf;
     //#pragma omp parallel for
     for (int level = 0; level <= this->depth; ++level) {
       // compute kernel matrix
-      RealVec up_check_surf =
-          box_surface_coordinates(this->p, this->r0, level, c, 2.95);
-      RealVec up_equiv_surf =
-          box_surface_coordinates(this->p, this->r0, level, c, 1.05);
+      auto up_check_surf = box_surface_coordinates<potential_t>(
+          this->p, this->r0, level, boxCentre, 2.95);
+      auto up_equiv_surf = box_surface_coordinates<potential_t>(
+          this->p, this->r0, level, boxCentre, 1.05);
       potential_matrix_t<> matrix_c2e =
           this->kernel_matrix(up_check_surf, up_equiv_surf);
       Eigen::BDCSVD<potential_matrix_t<>> svd(
@@ -820,20 +835,22 @@ class Fmm : public FmmKernel {
         fft_plan_dft(3, dim, reinterpret_cast<fft_complex*>(fftw_in.data()),
                      reinterpret_cast<fft_complex*>(fftw_out.data()),
                      FFTW_FORWARD, FFTW_ESTIMATE);
-    RealVec trg_coord(3, 0);
+    coord_t targetCoord = coord_t::Zero();
     for (int l = 1; l < this->depth + 1; ++l) {
       // compute M2L kernel matrix, perform DFT
 #pragma omp parallel for
       for (long long int i = 0; i < REL_COORD[M2L_Helper_Type].size(); ++i) {
-        real_t coord[3];
+        coord_t boxCentre;
         for (int d = 0; d < 3; d++) {
-          coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
-                     std::pow(0.5, l - 1);  // relative coords
+          boxCentre[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
+                         std::pow(0.5, l - 1);  // relative coords
         }
-        RealVec conv_coord =
-            convolution_grid(this->p, this->r0, l, coord);  // convolution grid
+        coord_matrix_t<dynamic> convolutionCoords =
+            convolution_grid<potential_t>(this->p, this->r0, l,
+                                          boxCentre);  // convolution grid
         // potentials on convolution grid
-        auto convValue = this->kernel_matrix(conv_coord, trg_coord);
+        auto convValue =
+            this->kernel_matrix<dynamic>(convolutionCoords, targetCoord);
         fft_execute_dft(
             plan, reinterpret_cast<fft_complex*>(convValue.data()),
             reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
@@ -982,7 +999,7 @@ class Fmm : public FmmKernel {
 //  fft_plan plan = fft_plan_dft_r2c(
 //      3, dim, fftw_in.data(), reinterpret_cast<fft_complex*>(fftw_out.data()),
 //      FFTW_ESTIMATE);
-//  RealVec trg_coord(3, 0);
+//  RealVec targetCoord(3, 0);
 //  for (int l = 1; l < this->depth + 1; ++l) {
 //    // compute M2L kernel matrix, perform DFT
 //#pragma omp parallel for
@@ -992,10 +1009,10 @@ class Fmm : public FmmKernel {
 //        coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
 //                   std::pow(0.5, l - 1);  // relative coords
 //      }
-//      RealVec conv_coord =
+//      RealVec convolutionCoords =
 //          convolution_grid(this->p, this->r0, l, coord);  // convolution grid
 //      // potentials on convolution grid
-//      auto convValue = this->kernel_matrix(conv_coord, trg_coord);
+//      auto convValue = this->kernel_matrix(convolutionCoords, targetCoord);
 //      fft_execute_dft_r2c(
 //          plan, convValue.data(),
 //          reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
@@ -1052,7 +1069,7 @@ class Fmm : public FmmKernel {
 //      fft_plan_dft(3, dim, reinterpret_cast<fft_complex*>(fftw_in.data()),
 //                   reinterpret_cast<fft_complex*>(fftw_out.data()),
 //                   FFTW_FORWARD, FFTW_ESTIMATE);
-//  RealVec trg_coord(3, 0);
+//  RealVec targetCoord(3, 0);
 //  for (int l = 1; l < this->depth + 1; ++l) {
 //// compute M2L kernel matrix, perform DFT
 //#pragma omp parallel for
@@ -1062,11 +1079,11 @@ class Fmm : public FmmKernel {
 //        coord[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
 //                   std::pow(0.5, l - 1);  // relative coords
 //      }
-//      RealVec conv_coord =
+//      RealVec convolutionCoords =
 //          convolution_grid(this->p, this->r0, l, coord);  // convolution grid
 //      // potentials on convolution grid
-//      potential_vector_t convValue = this->kernel_matrix(conv_coord,
-//      trg_coord);
+//      potential_vector_t convValue = this->kernel_matrix(convolutionCoords,
+//      targetCoord);
 //
 //      fft_execute_dft(
 //          plan, reinterpret_cast<fft_complex*>(convValue.data()),

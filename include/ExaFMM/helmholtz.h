@@ -33,98 +33,97 @@ class HelmholtzFmmKernel {
   template <int Rows = dynamic>
   using potential_vector_t = typename pt::template potential_vector_t<Rows>;
   using complex_t = typename pt::complex_t;
+  using coord_t = typename pt::coord_t;
+  template <int Rows = dynamic, int RowOrder = column_major>
+  using coord_matrix_t = typename pt::template coord_matrix_t<Rows, RowOrder>;
 
  public:
   // Argument types required for this kernel.
   using kernel_args_t = std::tuple<complex_t>;
-  complex_t wavek;  //!< Wave number k.
 
+  const complex_t wavek;  //!< Wave number k.
+
+ private:
+  const complex_t kappa;  //!< K used in Helmholtz kernel.
+  const real_t kernelCoef;
+
+ public:
   HelmholtzFmmKernel() = delete;
 
   HelmholtzFmmKernel(kernel_args_t kernelArgs)
-      : wavek{std::get<0>(kernelArgs)} {};
+      : wavek{std::get<0>(kernelArgs)},
+        kappa{wavek / complex_t{16}},
+        kernelCoef{real_t(1) / (64 * PI)} {};
 
-  template <int NumSources, int NumTargets>
-  void potential_P2P(const RealVec& src_coord,
-                     const potential_vector_t<NumSources>& src_value,
-                     const RealVec& trg_coord,
-                     potential_vector_t<NumTargets>& trg_value) {
-    simdvec zero((real_t)0);
-    real_t newton_coef = 16;
-    simdvec coef(real_t(1.0 / (4 * PI * newton_coef)));
-    simdvec k_real(wavek.real() / newton_coef);
-    simdvec k_imag(wavek.imag() / newton_coef);
-    int nsrcs = src_coord.size() / 3;
-    int ntrgs = trg_coord.size() / 3;
-    int t;
-    const complex_t I(0, 1);
-    for (t = 0; t + NSIMD <= ntrgs; t += NSIMD) {
-      simdvec tx(&trg_coord[3 * t + 0], 3 * (int)sizeof(real_t));
-      simdvec ty(&trg_coord[3 * t + 1], 3 * (int)sizeof(real_t));
-      simdvec tz(&trg_coord[3 * t + 2], 3 * (int)sizeof(real_t));
-      simdvec tv_real(zero);
-      simdvec tv_imag(zero);
-      for (int s = 0; s < nsrcs; s++) {
-        simdvec sx(src_coord[3 * s + 0]);
-        sx -= tx;
-        simdvec sy(src_coord[3 * s + 1]);
-        sy -= ty;
-        simdvec sz(src_coord[3 * s + 2]);
-        sz -= tz;
-        simdvec sv_real(src_value(s).real());
-        simdvec sv_imag(src_value(s).imag());
-        simdvec r2(zero);
-        r2 += sx * sx;
-        r2 += sy * sy;
-        r2 += sz * sz;
-        simdvec invr = rsqrt(r2);  // invr = newton_coef * 1/r
-        invr &= r2 > zero;
-
-        simdvec r = r2 * invr;
-        simdvec kr_real = k_real * r;   // k_real * r
-        simdvec kr_imag = k_imag * r;   // k_imag * r
-        simdvec e_ikr = exp(-kr_imag);  // exp(-k_imag*r)
-        // simdvec kr = k * r2 * invr;   // newton_coefs in k & invr cancel out
-        simdvec G_real = e_ikr * cos(kr_real) * invr;  // G = e^(ikr) / r
-        simdvec G_imag =
-            e_ikr * sin(kr_real) * invr;  // invr carries newton_coef
-        tv_real += sv_real * G_real - sv_imag * G_imag;  // p += G * q
-        tv_imag += sv_real * G_imag + sv_imag * G_real;
-      }
-      tv_real *= coef;  // coef carries 1/(4*PI) and offsets newton_coef in invr
-      tv_imag *= coef;
-      for (int m = 0; m < NSIMD && (t + m) < ntrgs; m++) {
-        trg_value(t + m) += complex_t(tv_real[m], tv_imag[m]);
-      }
-    }
-    for (; t < ntrgs; t++) {
-      complex_t potential(0, 0);
-      for (int s = 0; s < nsrcs; s++) {
-        vec3 dx;
-        for (int d = 0; d < 3; d++)
-          dx[d] = trg_coord[3 * t + d] - src_coord[3 * s + d];
-        real_t r2 = norm(dx);
-        if (r2 != 0) {
-          real_t r = std::sqrt(r2);
-          potential += std::exp(I * r * wavek) * src_value(s) / r;
-        }
-      }
-      trg_value(t) += potential / (4 * PI);
-    }
+  /** Compute the effect of source with a given strength at a given coordinate.
+   * @param sourceCoord The coordinate of the source particle.
+   * @param targetCoord The measurement location.
+   * @return The potential measured at targetCoord.
+   **/
+  inline potential_t potential_P2P(const coord_t sourceCoord,
+                                   const coord_t targetCoord) const noexcept {
+    auto radius = (sourceCoord - targetCoord).norm();
+    return kernelCoef * std::exp(radius * kappa * complex_t{0, 1}) / radius;
   }
 
-  /**
-   * @brief Compute potentials and gradients at targets induced by sources
+  /** Compute the effect of source with a given strength at a given coordinate.
+   * @param sourceCoord The coordinate of the source particle.
+   * @param sourceStrength The strength of the source particle.
+   * @param targetCoord The measurement location.
+   * @return The potential measured at targetCoord.
+   **/
+  inline potential_t potential_P2P(const coord_t sourceCoord,
+                                   const potential_t sourceStrength,
+                                   const coord_t targetCoord) const noexcept {
+    return sourceStrength * potential_P2P(sourceCoord, targetCoord);
+  }
+
+  template <int NumSources, int NumTargets, int SourceRowOrder,
+            int TargetRowOrder>
+  potential_vector_t<NumTargets> potential_P2P(
+      const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
+      const potential_vector_t<NumSources>& sourceStrengths,
+      const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
+    simdvec zero((real_t)0);
+    const int numSources = sourceCoords.rows();
+    const int numTargets = targetCoords.rows();
+    auto targetValues = potential_vector_t<NumTargets>::Zero(numTargets);
+    for (size_t i{0}; i < numTargets; ++i) {
+      for (size_t j{0}; j < numSources; ++j) {
+        targetValues(i) += potential_P2P(
+            sourceCoords.row(j), sourceStrengths(j), targetCoords.row(i));
+      }
+    }
+    return targetValues;
+  }
+
+  /** Compute potentials and gradients at targets induced by sources
+   * directly.
+   * @param sourceCoords Vector of coordinates of sources.
+   * @param targetCoords Vector of coordinates of targets.
+   * @return Vector of potentials of targets.
+   */
+  inline potential_t gradient_P2P(const coord_t sourceCoord,
+                                  const coord_t targetCoord) const noexcept {
+    auto radius = (sourceCoord - targetCoord).norm();
+    auto newtonOffset{1 / (16 * 16)};
+  }
+
+  /** Compute potentials and gradients at targets induced by sources
    * directly.
    *
-   * @param src_coord Vector of coordinates of sources.
-   * @param src_value Vector of charges of sources.
-   * @param trg_coord Vector of coordinates of targets.
-   * @param trg_value Vector of potentials of targets.
+   * @param sourceCoords Vector of coordinates of sources.
+   * @param sourceStrengths Vector of charges of sources.
+   * @param targetCoords Vector of coordinates of targets.
+   * @return Vector of potentials of targets.
    */
-  void gradient_P2P(RealVec& src_coord, potential_vector_t<dynamic>& src_value,
-                    RealVec& trg_coord,
-                    potential_vector_t<dynamic>& trg_value) {
+  template <int NumSources, int NumTargets, int SourceRowOrder,
+            int TargetRowOrder>
+  potential_vector_t<dynamic> gradient_P2P(
+      const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
+      const potential_vector_t<NumSources>& sourceStrengths,
+      const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
+    // The output is a mixture of potential and gradient... What to do?
     simdvec zero((real_t)0);
     simdvec one((real_t)1);
     real_t newton_coef =
