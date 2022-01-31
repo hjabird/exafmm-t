@@ -160,7 +160,7 @@ namespace ExaFMM {
 									}
 								}
 								else {
-									if (curr->is_leaf && curr->ntrgs <= fmm.nsurf) {
+									if (curr->is_leaf && curr->numTargets <= fmm.nsurf) {
 										P2P_set.insert(res);
 									}
 									else {
@@ -177,7 +177,7 @@ namespace ExaFMM {
 											node_t* temp = buffer.front();
 											buffer.pop();
 											if (!is_adjacent(temp->key, curr->key)) {
-												if (temp->is_leaf && temp->nsrcs <= fmm.nsurf) {
+												if (temp->is_leaf && temp->numSources <= fmm.nsurf) {
 													P2P_set.insert(temp);
 												}
 												else {
@@ -286,7 +286,7 @@ namespace ExaFMM {
 		unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
 		unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
 #pragma omp parallel for schedule(dynamic)
-		for (long long i = 0; i < nodes.size(); i++) {
+		for (int i = 0; i < static_cast<int>(nodes.size()); i++) {
 			node_t* node = &nodes[i];
 			build_M2L_list(node, nodes, key2id);
 			build_other_list(node, nodes, fmm, leaf_keys, key2id);

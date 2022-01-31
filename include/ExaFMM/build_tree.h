@@ -94,14 +94,14 @@ class adaptive_tree {
 
   //! Build nodes of tree adaptively using a top-down approach based on
   //! recursion
-  void build_tree(body_t* sources, body_t* sources_buffer, int source_begin,
-                  int source_end, body_t* targets, body_t* targets_buffer,
-                  int target_begin, int target_end, node_t* node, FmmT& fmm,
-                  bool direction = false) {
+  void build_tree(body_t* sources, body_t* sources_buffer, size_t source_begin,
+      size_t source_end, body_t* targets, body_t* targets_buffer,
+      size_t target_begin, size_t target_end, node_t* node, FmmT& fmm,
+      bool direction = false) {
     //! Create a tree node
     node->idx = int(node - &m_nodes[0]);  // current node's index in nodes
-    node->nsrcs = source_end - source_begin;
-    node->ntrgs = target_end - target_begin;
+    node->numSources = static_cast<int>(source_end - source_begin);
+    node->numTargets = static_cast<int>(target_end - target_begin);
     node->up_equiv.resize(fmm.nsurf);
     node->up_equiv.setZero();
     node->dn_equiv.resize(fmm.nsurf);
@@ -110,22 +110,23 @@ class adaptive_tree {
     node->key = getKey(iX, node->level);
 
     //! If node is a leaf
-    if (node->nsrcs <= fmm.ncrit && node->ntrgs <= fmm.ncrit) {
+    if (node->numSources <= fmm.ncrit && node->numTargets <= fmm.ncrit) {
       node->is_leaf = true;
-      node->trg_value.resize(node->ntrgs *
-                             4);  // initialize target result vector
-      node->trg_value.setZero();
-      if (node->nsrcs ||
-          node->ntrgs) {  // do not add to leafs if a node is empty
+      node->targetPotentials.resize(node->numTargets);  // initialize target result vector
+      node->targetPotentials.setZero();
+      node->targetGradients.resize(node->numTargets, 3);  // initialize target result vector
+      node->targetGradients.setZero();
+      if (node->numSources ||
+          node->numTargets) {  // do not add to leafs if a node is empty
         m_leafs.push_back(node);
       }
       if (direction) {
-        for (int i = source_begin; i < source_end; i++) {
+          for (size_t i{source_begin}; i < source_end; i++) {
           sources_buffer[i].X = sources[i].X;
           sources_buffer[i].q = sources[i].q;
           sources_buffer[i].ibody = sources[i].ibody;
         }
-        for (int i = target_begin; i < target_end; i++) {
+          for (size_t i{target_begin}; i < target_end; i++) {
           targets_buffer[i].X = targets[i].X;
           targets_buffer[i].ibody = targets[i].ibody;
         }
@@ -135,26 +136,22 @@ class adaptive_tree {
           (direction ? sources_buffer : sources) + source_begin;
       body_t* first_target =
           (direction ? targets_buffer : targets) + target_begin;
-      size_t sourceOffset = node->src_coord.size();
-      node->src_coord.resize(node->src_coord.size() + node->nsrcs * 3);
-      node->isrcs.resize(node->isrcs.size() + node->nsrcs);
-      node->src_value.resize(node->src_value.size() + node->nsrcs);
-      for (size_t sourceIdx = 0; sourceIdx < node->nsrcs; ++sourceIdx) {
-        for (int d = 0; d < 3; ++d) {
-          node->src_coord[sourceOffset + sourceIdx * 3 + d] =
-              first_source[sourceIdx].X[d];
-        }
+      size_t sourceOffset = node->sourceCoords.rows();
+      node->sourceCoords.resize(node->sourceCoords.rows() + node->numSources, 3);
+      node->isrcs.resize(node->isrcs.size() + node->numSources);
+      node->sourceStrengths.resize(node->sourceStrengths.rows() + node->numSources);
+      for (size_t sourceIdx = 0; sourceIdx < node->numSources; ++sourceIdx) {
+        node->sourceCoords.row(sourceOffset + sourceIdx) =
+            first_source[sourceIdx].X;
         node->isrcs[sourceOffset + sourceIdx] = first_source[sourceIdx].ibody;
-        node->src_value[sourceOffset + sourceIdx] = first_source[sourceIdx].q;
+        node->sourceStrengths[sourceOffset + sourceIdx] = first_source[sourceIdx].q;
       }
-      size_t targetOffset = node->trg_coord.size();
-      node->trg_coord.resize(node->trg_coord.size() + node->ntrgs * 3);
-      node->itrgs.resize(node->itrgs.size() + node->ntrgs);
-      for (int targetIdx = 0; targetIdx < node->ntrgs; ++targetIdx) {
-        for (int d = 0; d < 3; ++d) {
-          node->trg_coord[targetOffset + targetIdx * 3 + d] =
-              first_target[targetIdx].X[d];
-        }
+      size_t targetOffset = node->targetCoords.rows();
+      node->targetCoords.resize(node->targetCoords.rows() + node->numTargets, 3);
+      node->itrgs.resize(node->itrgs.size() + node->numTargets);
+      for (int targetIdx = 0; targetIdx < node->numTargets; ++targetIdx) {
+        node->targetCoords.row(targetOffset + targetIdx) =
+            first_target[targetIdx].X;
         node->itrgs[targetOffset + targetIdx] = first_target[targetIdx].ibody;
       }
       return;
@@ -202,27 +199,27 @@ class adaptive_tree {
    * @param offsets Vector of the offsets of sorted bodies in each octant
    */
   void sort_bodies(node_t* const node, body_t* const bodies,
-                   body_t* const buffer, int begin, int end,
+                   body_t* const buffer, size_t begin, size_t end,
                    std::vector<int>& size, std::vector<int>& offsets) {
     using vec3 = typename potential_traits<potential_t>::coord_t;
     // Count number of bodies in each octant
     size.resize(8, 0);
     vec3 X = node->x;  // the center of the node
-    for (int i = begin; i < end; i++) {
+    for (size_t i = begin; i < end; i++) {
       vec3& x = bodies[i].X;
       int octant = (x[0] > X[0]) + ((x[1] > X[1]) << 1) + ((x[2] > X[2]) << 2);
       size[octant]++;
     }
     // Exclusive scan to get offsets
     offsets.resize(8);
-    int offset = begin;
+    size_t offset = begin;
     for (int i = 0; i < 8; i++) {
-      offsets[i] = offset;
+      offsets[i] = static_cast<int>(offset);
       offset += size[i];
     }
     // Sort bodies by octant
     std::vector<int> counter(offsets);
-    for (int i = begin; i < end; i++) {
+    for (size_t i = begin; i < end; i++) {
       vec3& x = bodies[i].X;
       int octant = (x[0] > X[0]) + ((x[1] > X[1]) << 1) + ((x[2] > X[2]) << 2);
       buffer[counter[octant]].X = bodies[i].X;

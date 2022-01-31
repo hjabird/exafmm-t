@@ -66,7 +66,7 @@ void print<std::chrono::duration<double>>(std::string s,
 void print_divider(std::string s) {
   s.insert(0, " ");
   s.append(" ");
-  int halfLength = (dividerLength - s.length()) / 2;
+  size_t halfLength = (dividerLength - s.length()) / 2;
   std::cout << std::string(halfLength, '-') << s
             << std::string(dividerLength - halfLength - s.length(), '-')
             << std::endl;

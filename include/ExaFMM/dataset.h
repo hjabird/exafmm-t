@@ -88,7 +88,7 @@ namespace ExaFMM {
 				bodies[i].X[1] = Y;
 				bodies[i].X[2] = Z;
 				for (int d = 0; d < 3; d++) {
-					Xmax = Xmax > fabs(bodies[i].X[d]) ? Xmax : fabs(bodies[i].X[d]);
+					Xmax = Xmax > fabs(bodies[i].X[d]) ? Xmax : static_cast<int>(fabs(bodies[i].X[d]));
 				}
 				i++;
 			}

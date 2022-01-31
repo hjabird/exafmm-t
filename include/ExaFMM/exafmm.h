@@ -84,10 +84,17 @@ struct potential_traits {
 
   /// A matrix of the potential_t.
   template <int Rows = dynamic, int Cols = dynamic, int RowOrder = row_major>
-  using potential_matrix_t = Eigen::Matrix<potential_t, Rows, Cols, RowOrder>;
+  using potential_matrix_t = 
+      Eigen::Matrix<potential_t, Rows, Cols, RowOrder>;
   /// A vector of the potential_t.
   template <int Rows = dynamic>
   using potential_vector_t = Eigen::Matrix<potential_t, Rows, 1>;
+  /// A type to represent the grad of the potential
+  using potential_grad_t = Eigen::Matrix<potential_t, 1, 3>;
+  /// Represents a vector of potential_grad_t. 
+  template <int Rows = dynamic, int RowOrder = column_major>
+  using potential_grad_vector_t = 
+      Eigen::Matrix<potential_t, Rows, 3, RowOrder>;
   /// A matrix of the real_t.
   template <int Rows = dynamic, int Cols = dynamic, int RowOrder = row_major>
   using real_matrix_t = Eigen::Matrix<real_t, Rows, Cols, RowOrder>;
@@ -103,10 +110,11 @@ struct potential_traits {
   using complex_vector_t = Eigen::Matrix<complex_t, Rows, 1>;
 
   /// Coordinate vector.
-  using coord_t = Eigen::Matrix<real_t, 3, 1>;
+  using coord_t = Eigen::Matrix<real_t, 1, 3>;
   /// A vector (as in multiple) coordinates
   template <int Rows = dynamic, int RowOrder = column_major>
-  using coord_matrix_t = Eigen::Matrix<real_t, Rows, 3, RowOrder>;
+  using coord_matrix_t = 
+      Eigen::Matrix<real_t, Rows, 3, RowOrder>;
 };
 
 const int MEM_ALIGN = 64;
@@ -203,6 +211,7 @@ class Node {
   using potential_t = PotentialT;
   using real_t = typename pt::real_t;
   using potential_vector_t = typename pt::potential_vector_t<>;
+  using potential_grad_vector_t = typename pt::template potential_grad_vector_t<dynamic>;
   using coord_t = typename pt::coord_t;
   using coord_matrix_t = typename pt::coord_matrix_t<>;
   using node_t = typename Node<potential_t>;
@@ -211,8 +220,8 @@ class Node {
   size_t idx;             //!< Index in the octree
   size_t idx_M2L;         //!< Index in global M2L interaction list
   bool is_leaf;           //!< Whether the node is leaf
-  int ntrgs;              //!< Number of targets
-  int nsrcs;              //!< Number of sources
+  int numTargets;         //!< Number of targets
+  int numSources;         //!< Number of sources
   coord_t x;              //!< Coordinates of the center of the node
   real_t r;               //!< Radius of the node
   uint64_t key;           //!< Morton key
@@ -230,11 +239,11 @@ class Node {
       M2L_list;  //!< Vector of pointers to nodes in M2L interaction list
   std::vector<int> isrcs;    //!< Vector of initial source numbering
   std::vector<int> itrgs;    //!< Vector of initial target numbering
-  coord_matrix_t src_coord;  //!< Vector of coordinates of sources in the node
-  coord_matrix_t trg_coord;  //!< Vector of coordinates of targets in the node
-  potential_vector_t src_value;  //!< Vector of charges of sources in the node
-  potential_vector_t
-      trg_value;  //!< Vector of potentials and gradients of targets in the node
+  coord_matrix_t sourceCoords;  //!< Vector of coordinates of sources in the node
+  coord_matrix_t targetCoords;  //!< Vector of coordinates of targets in the node
+  potential_vector_t sourceStrengths;  //!< Vector of charges of sources in the node
+  potential_vector_t targetPotentials;  //!< Vector of potentials targets in the node
+  potential_grad_vector_t targetGradients;  //!< Vector of potentials targets in the node
   potential_vector_t
       up_equiv;  //!< Upward check potentials / Upward equivalent densities
   potential_vector_t

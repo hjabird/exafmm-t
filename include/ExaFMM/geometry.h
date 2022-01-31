@@ -104,6 +104,8 @@ potential_traits<PotentialT>::coord_matrix_t<dynamic> convolution_grid(
   EXAFMM_ASSERT(p > 0);
   EXAFMM_ASSERT(r0 > 0);
   EXAFMM_ASSERT(level >= 0);
+  using real_t = typename potential_traits<PotentialT>::real_t;
+  using coord_t = typename potential_traits<PotentialT>::coord_t;
 
   real_t d = 2 * r0 * std::pow(0.5, level);
   real_t a = d * 1.05;  // side length of upward equivalent/downward check box
@@ -114,9 +116,9 @@ potential_traits<PotentialT>::coord_matrix_t<dynamic> convolution_grid(
   for (size_t i = 0; i < n1; i++) {
     for (size_t j = 0; j < n1; j++) {
       for (size_t k = 0; k < n1; k++) {
-        gridCoords.row(i + n1 * j + n2 * k) = {(i - p) * a / (p - 1),
+        gridCoords.row(i + n1 * j + n2 * k) = coord_t({(i - p) * a / (p - 1),
                                                (j - p) * a / (p - 1),
-                                               (k - p) * a / (p - 1)};
+                                               (k - p) * a / (p - 1)});
         gridCoords.row(i + n1 * j + n2 * k) += boxCentre;
       }
     }
@@ -137,11 +139,8 @@ std::vector<int> generate_surf2conv_up(int p) {
   using coord_t = typename potential_traits<PotentialT>::coord_t;
   EXAFMM_ASSERT(p > 0);
   int n1 = 2 * p;
-  coord_t c;
-  for (int d = 0; d < 3; d++) {
-    c(d) = 0.5 * (p - 1)
-  };
-  auto surf = box_surface_coordinates(p, 0.5, 0, c, real_t(p - 1));
+  coord_t c = coord_t::Ones(3) * 0.5 * (p - 1);
+  auto surf = box_surface_coordinates<PotentialT>(p, 0.5, 0, c, real_t(p - 1));
   std::vector<int> map(6 * (p - 1) * (p - 1) + 2);
   for (size_t i = 0; i < map.size(); i++) {
     map[i] = (int)(p - 1 - surf(i, 0)) + ((int)(p - 1 - surf(i, 1))) * n1 +
@@ -209,7 +208,7 @@ void init_rel_coord(int max_r, int min_r, int step, Precompute_Type t) {
           coord[1] = j;
           coord[2] = k;
           REL_COORD[t].push_back(coord);
-          HASH_LUT[t][hash(coord)] = REL_COORD[t].size() - 1;
+          HASH_LUT[t][hash(coord)] = static_cast<int>(REL_COORD[t].size() - 1);
         }
       }
     }
@@ -218,8 +217,8 @@ void init_rel_coord(int max_r, int min_r, int step, Precompute_Type t) {
 
 //! Generate a map that maps indices of M2L_Type to indices of M2L_Helper_Type
 void generate_M2L_index_map() {
-  int npos =
-      REL_COORD[M2L_Type].size();  // number of relative coords for M2L_Type
+  int npos = static_cast<int>(
+      REL_COORD[M2L_Type].size());  // number of relative coords for M2L_Type
   M2L_INDEX_MAP.resize(npos, std::vector<int>(NCHILD * NCHILD));
 #pragma omp parallel for
   for (int i = 0; i < npos; ++i) {
