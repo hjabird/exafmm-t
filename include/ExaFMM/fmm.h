@@ -116,10 +116,11 @@ class Fmm : public FmmKernel {
    * @param targetCoords Vector of target coordinates.
    * @return matrix Kernel matrix.
    */
-  template <int NumSources = dynamic, int NumTargets = dynamic, 
-      int SourceRowOrder = row_major, int TargetRowOrder = row_major>
-  auto kernel_matrix(const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
-                     const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
+  template <int NumSources = dynamic, int NumTargets = dynamic,
+            int SourceRowOrder = row_major, int TargetRowOrder = row_major>
+  auto kernel_matrix(
+      const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
+      const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
     const auto sourceValue = potential_vector_t<1>::Ones();
     const size_t numSources = sourceCoords.rows();
     const size_t numTargets = targetCoords.rows();
@@ -144,13 +145,15 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = targets[i];
-      nodeptrvec_t& sources = target->P2P_list;
+      nodeptrvec_t& sources = target->P2Plist();
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        target->targetPotentials = potential_P2P(
-            source->sourceCoords, source->sourceStrengths, target->targetCoords);
-        target->targetGradients = gradient_P2P(
-            source->sourceCoords, source->sourceStrengths, target->targetCoords);
+        target->target_potentials() =
+            potential_P2P(source->source_coords(), source->source_strengths(),
+                          target->target_coords());
+        target->target_gradients() =
+            gradient_P2P(source->source_coords(), source->source_strengths(),
+                         target->target_coords());
       }
     }
   }
@@ -162,23 +165,24 @@ class Fmm : public FmmKernel {
     std::vector<coord_matrix_t<>> upEquivSurf;
     upEquivSurf.resize(depth + 1);
     for (int level = 0; level <= depth; level++) {
-        upEquivSurf[level].resize(nsurf, 3);
-        upEquivSurf[level] = box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
+      upEquivSurf[level].resize(nsurf, 3);
+      upEquivSurf[level] =
+          box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = targets[i];
-      nodeptrvec_t& sources = target->M2P_list;
+      nodeptrvec_t& sources = target->M2Plist();
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        int level = source->level;
+        int level = source->level();
         // source node's equiv coord = relative equiv coord + node's center
         coord_matrix_t<> sourceEquivCoords{upEquivSurf[level]};
-        sourceEquivCoords.rowwise() += source->x;
-        target->targetPotentials = potential_P2P(
-            sourceEquivCoords, source->up_equiv, target->targetCoords);
-        target->targetGradients = gradient_P2P(
-            sourceEquivCoords, source->up_equiv, target->targetCoords);
+        sourceEquivCoords.rowwise() += source->centre();
+        target->target_potentials() = potential_P2P(
+            sourceEquivCoords, source->up_equiv(), target->target_coords());
+        target->target_gradients() = gradient_P2P(
+            sourceEquivCoords, source->up_equiv(), target->target_coords());
       }
     }
   }
@@ -191,21 +195,23 @@ class Fmm : public FmmKernel {
     dn_check_surf.resize(depth + 1);
     for (int level = 0; level <= depth; level++) {
       dn_check_surf[level].resize(nsurf, 3);
-      dn_check_surf[level] = box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
+      dn_check_surf[level] =
+          box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = &targets[i];
-      nodeptrvec_t& sources = target->P2L_list;
+      nodeptrvec_t& sources = {target->P2Llist()};
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        int level = target->level;
+        int level = target->level();
         // target node's check coord = relative check coord + node's center
         coord_matrix_t<> targetCheckCoords(nsurf, 3);
         targetCheckCoords = dn_check_surf[level];
-        targetCheckCoords.rowwise() += target->x;
-        target->dn_equiv = potential_P2P(
-            source->sourceCoords, source->sourceStrengths, targetCheckCoords);
+        targetCheckCoords.rowwise() += target->centre();
+        target->down_equiv() =
+            potential_P2P(source->source_coords(), source->source_strengths(),
+                          targetCheckCoords);
       }
     }
   }
@@ -257,7 +263,7 @@ class Fmm : public FmmKernel {
     stop("L2P", verbose);
   }
 
-  /** Check FMM accuracy by comparison to directly evaluated (N^2) solution. 
+  /** Check FMM accuracy by comparison to directly evaluated (N^2) solution.
    *
    * @param leafs Vector of leaves.
    * @param sample Sample only some values, reducing computational cost.
@@ -281,13 +287,14 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets2.size()); i++) {
       node_t* target = &targets2[i];
-      target->targetPotentials.setZero();
-      target->targetGradients.setZero();
+      target->zero_target_values();
       for (size_t j = 0; j < leafs.size(); j++) {
-        target->targetPotentials += potential_P2P(leafs[j]->sourceCoords, leafs[j]->sourceStrengths,
-                     target->targetCoords);
-        target->targetGradients += gradient_P2P(leafs[j]->sourceCoords, leafs[j]->sourceStrengths,
-            target->targetCoords);
+        target->target_potentials() += potential_P2P(
+            leafs[j]->source_coords(), leafs[j]->source_strengths(),
+            target->target_coords());
+        target->target_gradients() +=
+            gradient_P2P(leafs[j]->source_coords(),
+                         leafs[j]->source_strengths(), target->target_coords());
       }
     }
 
@@ -295,16 +302,18 @@ class Fmm : public FmmKernel {
     double potentialDiff{0}, potentialNorm{0};
     double gradientDiff{0}, gradientNorm{0};
     for (size_t i = 0; i < targets.size(); i++) {
-        potentialNorm += targets2[i].targetPotentials.squaredNorm();
-        potentialDiff += (targets2[i].targetPotentials -
-                          targets[i].targetPotentials).squaredNorm();
-        gradientNorm += targets2[i].targetGradients.squaredNorm();
-        gradientDiff += (targets2[i].targetGradients -
-                         targets[i].targetGradients).squaredNorm();
+      potentialNorm += targets2[i].target_potentials().squaredNorm();
+      potentialDiff +=
+          (targets2[i].target_potentials() - targets[i].target_potentials())
+              .squaredNorm();
+      gradientNorm += targets2[i].target_gradients().squaredNorm();
+      gradientDiff +=
+          (targets2[i].target_gradients() - targets[i].target_gradients())
+              .squaredNorm();
     }
     RealVec err(2);
     err[0] = sqrt(potentialDiff / potentialNorm);
-    err[1] = sqrt(gradientDiff / gradientNorm); 
+    err[1] = sqrt(gradientDiff / gradientNorm);
     return err;
   }
 
@@ -332,16 +341,19 @@ class Fmm : public FmmKernel {
     int& nsurf_ = this->nsurf;
     coord_t parent_coord{0, 0, 0};
     for (int level = 0; level <= this->depth; level++) {
-      auto parent_up_check_surf =
-          box_surface_coordinates<potential_t>(this->p, this->r0, level, parent_coord, 2.95);
+      auto parent_up_check_surf = box_surface_coordinates<potential_t>(
+          this->p, this->r0, level, parent_coord, 2.95);
       real_t s = this->r0 * std::pow(0.5, level + 1);
-      int npos = static_cast<int>(REL_COORD[M2M_Type].size());  // number of relative positions
+      int npos = static_cast<int>(
+          REL_COORD[M2M_Type].size());  // number of relative positions
 #pragma omp parallel for
       for (int i = 0; i < npos; i++) {
         // compute kernel matrix
         ivec3& coord = REL_COORD[M2M_Type][i];
         coord_t child_coord{parent_coord};
-        for (int d{ 0 }; d < 3; ++d) { child_coord(d) += coord[d] * s; }
+        for (int d{0}; d < 3; ++d) {
+          child_coord(d) += coord[d] * s;
+        }
         auto child_up_equiv_surf = box_surface_coordinates<potential_t>(
             this->p, this->r0, level + 1, child_coord, 1.05);
         potential_matrix_t<> matrix_pc2ce =
@@ -457,16 +469,16 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
       node_t* leaf = leafs[i];
-      int level = leaf->level;
+      int level = leaf->level();
       // calculate upward check potential induced by sources' charges
       coord_matrix_t<> check_coord{up_check_surf[level]};
-      check_coord.rowwise() += leaf->x;
-      leaf->up_equiv =
-          this->potential_P2P(leaf->sourceCoords, leaf->sourceStrengths, check_coord);
+      check_coord.rowwise() += leaf->centre();
+      leaf->up_equiv() = this->potential_P2P(
+          leaf->source_coords(), leaf->source_strengths(), check_coord);
       Eigen::Matrix<potential_t, Eigen::Dynamic, 1> equiv =
-          matrix_UC2E_V[level] * matrix_UC2E_U[level] * leaf->up_equiv;
+          matrix_UC2E_V[level] * matrix_UC2E_U[level] * leaf->up_equiv();
       for (int k = 0; k < nsurf_; k++) {
-        leaf->up_equiv[k] = equiv[k];
+        leaf->up_equiv()[k] = equiv[k];
       }
     }
   }
@@ -485,36 +497,37 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
       node_t* leaf = leafs[i];
-      int level = leaf->level;
+      int level = leaf->level();
       // down check surface potential -> equivalent surface charge
       potential_vector_t<> equiv =
-          matrix_DC2E_V[level] * matrix_DC2E_U[level] * leaf->dn_equiv;
-      leaf->dn_equiv = equiv;
+          matrix_DC2E_V[level] * matrix_DC2E_U[level] * leaf->down_equiv();
+      leaf->down_equiv() = equiv;
       // equivalent surface charge -> target potential
       coord_matrix_t<> equiv_coord(dn_equiv_surf[level]);
-      equiv_coord.rowwise() += leaf->x;
-      leaf->targetPotentials = this->potential_P2P(
-                                equiv_coord, leaf->dn_equiv, leaf->targetCoords);
-      leaf->targetGradients = this->gradient_P2P(
-                                equiv_coord, leaf->dn_equiv, leaf->targetCoords);
+      equiv_coord.rowwise() += leaf->centre();
+      leaf->target_potentials() = this->potential_P2P(
+          equiv_coord, leaf->down_equiv(), leaf->target_coords());
+      leaf->target_gradients() = this->gradient_P2P(
+          equiv_coord, leaf->down_equiv(), leaf->target_coords());
     }
   }
 
   //! M2M operator
   void M2M(node_t* node) {
     const int nsurf_ = this->nsurf;
-    if (node->is_leaf) return;
+    if (node->is_leaf()) return;
 #pragma omp parallel for schedule(dynamic)
     for (int octant = 0; octant < 8; octant++) {
-      if (node->children[octant]) M2M(node->children[octant]);
+      if (node->has_child(octant)) {
+        M2M(&node->child(octant));
+      }
     }
     for (int octant = 0; octant < 8; octant++) {
-      if (node->children[octant]) {
-        node_t* child = node->children[octant];
-        int level = node->level;
+      if (node->has_child(octant)) {
+        int level = node->level();
         potential_vector_t<> buffer =
-            matrix_M2M[level][octant] * node->dn_equiv;
-        node->up_equiv += buffer;
+            matrix_M2M[level][octant] * node->down_equiv();
+        node->up_equiv() += buffer;
       }
     }
   }
@@ -522,20 +535,20 @@ class Fmm : public FmmKernel {
   //! L2L operator
   void L2L(node_t* node) {
     const int nsurf_ = this->nsurf;
-    if (node->is_leaf) return;
+    if (node->is_leaf()) return;
     for (int octant = 0; octant < 8; octant++) {
-      if (node->children[octant]) {
-        node_t* child = node->children[octant];
-        int level = node->level;
+      if (node->has_child(octant)) {
+        node_t& child = node->child(octant);
+        int level = node->level();
         potential_vector_t<> buffer =
-            matrix_L2L[level][octant] * node->dn_equiv;
-        child->dn_equiv += buffer;
+            matrix_L2L[level][octant] * node->down_equiv();
+        child.down_equiv() += buffer;
       }
     }
 #pragma omp parallel for schedule(dynamic)
     for (int octant = 0; octant < 8; octant++) {
-      if (node->children[octant]) {
-        L2L(node->children[octant]);
+      if (node->has_child(octant)) {
+        L2L(&node->child(octant));
       }
     }
   }
@@ -543,21 +556,22 @@ class Fmm : public FmmKernel {
   void M2L_setup(nodeptrvec_t& nonleafs) {
     const int nsurf_ = this->nsurf;
     const int depth_ = this->depth;
-    int npos = static_cast<int>(REL_COORD[M2L_Type].size());  // number of M2L relative positions
-    m2ldata.resize(depth_);                 // initialize m2ldata
+    int npos = static_cast<int>(
+        REL_COORD[M2L_Type].size());  // number of M2L relative positions
+    m2ldata.resize(depth_);           // initialize m2ldata
 
     // construct lists of target nodes for M2L operator at each level
-    std::vector<nodeptrvec_t> trg_nodes(depth_);
+    std::vector<nodeptrvec_t> targetNodes(depth_);
     for (size_t i = 0; i < nonleafs.size(); i++) {
-      trg_nodes[nonleafs[i]->level].push_back(nonleafs[i]);
+      targetNodes[nonleafs[i]->level()].push_back(nonleafs[i]);
     }
 
     // prepare for m2ldata for each level
     for (int l = 0; l < depth_; l++) {
       // construct M2L source nodes for current level
       std::set<node_t*> src_nodes_;
-      for (size_t i = 0; i < trg_nodes[l].size(); i++) {
-        nodeptrvec_t& M2L_list = trg_nodes[l][i]->M2L_list;
+      for (size_t i = 0; i < targetNodes[l].size(); i++) {
+        nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
         for (int k = 0; k < npos; k++) {
           if (M2L_list[k]) src_nodes_.insert(M2L_list[k]);
         }
@@ -567,38 +581,39 @@ class Fmm : public FmmKernel {
       for (; it != src_nodes_.end(); it++) {
         src_nodes.push_back(*it);
       }
-      // prepare the indices of src_nodes & trg_nodes in all_up_equiv &
+      // prepare the indices of src_nodes & targetNodes in all_up_equiv &
       // all_dn_equiv
       std::vector<size_t> fft_offset(
           src_nodes.size());  // displacement in all_up_equiv
       std::vector<size_t> ifft_offset(
-          trg_nodes[l].size());  // displacement in all_dn_equiv
+          targetNodes[l].size());  // displacement in all_dn_equiv
       for (size_t i = 0; i < src_nodes.size(); i++) {
-        fft_offset[i] = src_nodes[i]->children[0]->idx * nsurf_;
+        fft_offset[i] = src_nodes[i]->child(0).index() * nsurf_;
       }
-      for (size_t i = 0; i < trg_nodes[l].size(); i++) {
-        ifft_offset[i] = trg_nodes[l][i]->children[0]->idx * nsurf_;
+      for (size_t i = 0; i < targetNodes[l].size(); i++) {
+        ifft_offset[i] = targetNodes[l][i]->child(0).index() * nsurf_;
       }
 
       // calculate interaction_offset_f & interaction_count_offset
       std::vector<size_t> interaction_offset_f;
       std::vector<size_t> interaction_count_offset;
       for (size_t i = 0; i < src_nodes.size(); i++) {
-        src_nodes[i]->idx_M2L = i;  // node_id: node's index in src_nodes list
+        src_nodes[i]->indexM2L() =
+            i;  // node_id: node's index in src_nodes list
       }
-      size_t nblk_trg = trg_nodes[l].size() * sizeof(real_t) / CACHE_SIZE;
+      size_t nblk_trg = targetNodes[l].size() * sizeof(real_t) / CACHE_SIZE;
       if (nblk_trg == 0) nblk_trg = 1;
       size_t interaction_count_offset_ = 0;
       size_t fft_size = 2 * NCHILD * this->nfreq;
       for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
-        size_t blk_start = (trg_nodes[l].size() * iblk_trg) / nblk_trg;
-        size_t blk_end = (trg_nodes[l].size() * (iblk_trg + 1)) / nblk_trg;
+        size_t blk_start = (targetNodes[l].size() * iblk_trg) / nblk_trg;
+        size_t blk_end = (targetNodes[l].size() * (iblk_trg + 1)) / nblk_trg;
         for (int k = 0; k < npos; k++) {
           for (size_t i = blk_start; i < blk_end; i++) {
-            nodeptrvec_t& M2L_list = trg_nodes[l][i]->M2L_list;
+            nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
             if (M2L_list[k]) {
               interaction_offset_f.push_back(
-                  M2L_list[k]->idx_M2L *
+                  M2L_list[k]->indexM2L() *
                   fft_size);  // src_node's displacement in fft_in
               interaction_offset_f.push_back(
                   i * fft_size);  // trg_node's displacement in fft_out
@@ -626,7 +641,7 @@ class Fmm : public FmmKernel {
     size_t npos = matrix_M2L.size();
     size_t nblk_inter =
         interaction_count_offset.size();  // num of blocks of interactions
-    size_t nblk_trg = nblk_inter / npos;  // num of blocks based on trg_nodes
+    size_t nblk_trg = nblk_inter / npos;  // num of blocks based on targetNodes
     int BLOCK_SIZE = CACHE_SIZE * 2 / sizeof(real_t);
     std::vector<real_t*> IN_(BLOCK_SIZE * nblk_inter);
     std::vector<real_t*> OUT_(BLOCK_SIZE * nblk_inter);
@@ -638,7 +653,8 @@ class Fmm : public FmmKernel {
     }
 
 #pragma omp parallel for
-    for (int iblk_inter{0}; iblk_inter < static_cast<int>(nblk_inter); iblk_inter++) {
+    for (int iblk_inter{0}; iblk_inter < static_cast<int>(nblk_inter);
+         iblk_inter++) {
       size_t interaction_count_offset0 =
           (iblk_inter == 0 ? 0 : interaction_count_offset[iblk_inter - 1]);
       size_t interaction_count_offset1 = interaction_count_offset[iblk_inter];
@@ -714,14 +730,14 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for collapse(2)
     for (int i = 0; i < nnodes; ++i) {
       for (int j = 0; j < nsurf_; ++j) {
-        all_up_equiv[i * nsurf_ + j] = nodes[i].up_equiv[j];
-        all_dn_equiv[i * nsurf_ + j] = nodes[i].dn_equiv[j];
+        all_up_equiv[i * nsurf_ + j] = nodes[i].up_equiv()[j];
+        all_dn_equiv[i * nsurf_ + j] = nodes[i].down_equiv()[j];
       }
     }
     // FFT-accelerate M2L
     for (size_t l{0}; l < this->depth; ++l) {
       // load M2L matrix for current level
-        for (size_t i{0}; i < npos; ++i) {
+      for (size_t i{0}; i < npos; ++i) {
         ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), msize);
       }
       AlignedVec fft_in, fft_out;
@@ -737,7 +753,7 @@ class Fmm : public FmmKernel {
 #pragma omp parallel for collapse(2)
     for (int i = 0; i < nnodes; ++i) {
       for (int j = 0; j < nsurf_; ++j) {
-        nodes[i].dn_equiv[j] = all_dn_equiv[i * nsurf_ + j];
+        nodes[i].down_equiv()[j] = all_dn_equiv[i * nsurf_ + j];
       }
     }
     ifile.close();  // close ifstream
@@ -807,7 +823,8 @@ class Fmm : public FmmKernel {
     for (int l = 1; l < this->depth + 1; ++l) {
       // compute M2L kernel matrix, perform DFT
 #pragma omp parallel for
-      for (int i = 0; i < static_cast<int>(REL_COORD[M2L_Helper_Type].size()); ++i) {
+      for (int i = 0; i < static_cast<int>(REL_COORD[M2L_Helper_Type].size());
+           ++i) {
         coord_t boxCentre;
         for (int d = 0; d < 3; d++) {
           boxCentre[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
@@ -867,7 +884,8 @@ class Fmm : public FmmKernel {
         FFTW_ESTIMATE);
 
 #pragma omp parallel for
-    for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size()); node_idx++) {
+    for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size());
+         node_idx++) {
       RealVec buffer(fft_size, 0);
       ComplexVec equiv_t(NCHILD * nconv_, complex_t(0., 0.));
 

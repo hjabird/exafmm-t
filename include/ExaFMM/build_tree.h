@@ -71,17 +71,13 @@ class adaptive_tree {
     bodies_t sources_buffer = sources;
     bodies_t targets_buffer = targets;
     m_nodes = nodevec_t(1);
-    m_nodes[0].parent = nullptr;
-    m_nodes[0].octant = 0;
-    m_nodes[0].x = fmm.x0;
-    m_nodes[0].r = fmm.r0;
-    m_nodes[0].level = 0;
+    m_nodes[0].set_geometry(fmm.x0, fmm.r0);
     m_nodes.reserve((sources.size() + targets.size()) * (32 / fmm.ncrit + 1));
     build_tree(&sources[0], &sources_buffer[0], 0, sources.size(), &targets[0],
                &targets_buffer[0], 0, targets.size(), &m_nodes[0], fmm);
     int depth = -1;
     for (const auto& leaf : m_leafs) {
-      depth = std::max(leaf->level, depth);
+      depth = std::max(leaf->level(), depth);
     }
     fmm.depth = depth;
   }
@@ -94,96 +90,65 @@ class adaptive_tree {
 
   //! Build nodes of tree adaptively using a top-down approach based on
   //! recursion
-  void build_tree(body_t* sources, body_t* sources_buffer, size_t source_begin,
-      size_t source_end, body_t* targets, body_t* targets_buffer,
-      size_t target_begin, size_t target_end, node_t* node, FmmT& fmm,
-      bool direction = false) {
+  void build_tree(body_t* sources, body_t* sourcesBuffer, size_t sourcesBegin,
+                  size_t sourcesEnd, body_t* targets, body_t* targetsBuffer,
+                  size_t targetsBegin, size_t targetsEnd, node_t* node,
+                  FmmT& fmm, bool direction = false) {
     //! Create a tree node
-    node->idx = int(node - &m_nodes[0]);  // current node's index in nodes
-    node->numSources = static_cast<int>(source_end - source_begin);
-    node->numTargets = static_cast<int>(target_end - target_begin);
-    node->up_equiv.resize(fmm.nsurf);
-    node->up_equiv.setZero();
-    node->dn_equiv.resize(fmm.nsurf);
-    node->dn_equiv.setZero();
-    ivec3 iX = get3DIndex<potential_t>(node->x, node->level, fmm.x0, fmm.r0);
-    node->key = getKey(iX, node->level);
+    node->set_index(node - &m_nodes[0]);  // current node's index in nodes
+    const size_t numSources = sourcesEnd - sourcesBegin;
+    const size_t numTargets = targetsEnd - targetsBegin;
+    const bool isLeaf{numSources <= fmm.ncrit && numTargets <= fmm.ncrit};
+    node->set_num_sources_and_targets(numSources, numTargets, isLeaf);
+    node->set_num_surfs(fmm.nsurf);
+    const ivec3 iX =
+        get3DIndex<potential_t>(node->centre(), node->level(), fmm.x0, fmm.r0);
+    node->set_key(getKey(iX, node->level()));
 
-    //! If node is a leaf
-    if (node->numSources <= fmm.ncrit && node->numTargets <= fmm.ncrit) {
-      node->is_leaf = true;
-      node->targetPotentials.resize(node->numTargets);  // initialize target result vector
-      node->targetPotentials.setZero();
-      node->targetGradients.resize(node->numTargets, 3);  // initialize target result vector
-      node->targetGradients.setZero();
-      if (node->numSources ||
-          node->numTargets) {  // do not add to leafs if a node is empty
+    if (isLeaf) {
+      if (numSources || numTargets) {  // do not add to leafs if a node is empty
         m_leafs.push_back(node);
       }
       if (direction) {
-          for (size_t i{source_begin}; i < source_end; i++) {
-          sources_buffer[i].X = sources[i].X;
-          sources_buffer[i].q = sources[i].q;
-          sources_buffer[i].ibody = sources[i].ibody;
+        for (size_t i{sourcesBegin}; i < sourcesEnd; i++) {
+          sourcesBuffer[i] = sources[i];
         }
-          for (size_t i{target_begin}; i < target_end; i++) {
-          targets_buffer[i].X = targets[i].X;
-          targets_buffer[i].ibody = targets[i].ibody;
+        for (size_t i{targetsBegin}; i < targetsEnd; i++) {
+          targetsBuffer[i] = targets[i];
         }
       }
       // Copy sources and targets' coords and values to leaf
       body_t* first_source =
-          (direction ? sources_buffer : sources) + source_begin;
+          (direction ? sourcesBuffer : sources) + sourcesBegin;
       body_t* first_target =
-          (direction ? targets_buffer : targets) + target_begin;
-      size_t sourceOffset = node->sourceCoords.rows();
-      node->sourceCoords.resize(node->sourceCoords.rows() + node->numSources, 3);
-      node->isrcs.resize(node->isrcs.size() + node->numSources);
-      node->sourceStrengths.resize(node->sourceStrengths.rows() + node->numSources);
-      for (size_t sourceIdx = 0; sourceIdx < node->numSources; ++sourceIdx) {
-        node->sourceCoords.row(sourceOffset + sourceIdx) =
-            first_source[sourceIdx].X;
-        node->isrcs[sourceOffset + sourceIdx] = first_source[sourceIdx].ibody;
-        node->sourceStrengths[sourceOffset + sourceIdx] = first_source[sourceIdx].q;
+          (direction ? targetsBuffer : targets) + targetsBegin;
+      for (size_t sourceIdx = 0; sourceIdx < numSources; ++sourceIdx) {
+        node->set_source(sourceIdx, first_source[sourceIdx]);
       }
-      size_t targetOffset = node->targetCoords.rows();
-      node->targetCoords.resize(node->targetCoords.rows() + node->numTargets, 3);
-      node->itrgs.resize(node->itrgs.size() + node->numTargets);
-      for (int targetIdx = 0; targetIdx < node->numTargets; ++targetIdx) {
-        node->targetCoords.row(targetOffset + targetIdx) =
-            first_target[targetIdx].X;
-        node->itrgs[targetOffset + targetIdx] = first_target[targetIdx].ibody;
+      for (int targetIdx = 0; targetIdx < node->num_targets(); ++targetIdx) {
+        node->set_target(targetIdx, first_target[targetIdx]);
       }
-      return;
-    }
-    // Sort bodies and save in buffer
-    std::vector<int> source_size, source_offsets;
-    std::vector<int> target_size, target_offsets;
-    sort_bodies(node, sources, sources_buffer, source_begin, source_end,
-                source_size, source_offsets);  // sources_buffer is sorted
-    sort_bodies(node, targets, targets_buffer, target_begin, target_end,
-                target_size, target_offsets);  // targets_buffer is sorted
-    //! Loop over children and recurse
-    node->is_leaf = false;
-    m_nonleafs.push_back(node);
-    assert(m_nodes.capacity() >= m_nodes.size() + NCHILD);
-    m_nodes.resize(m_nodes.size() + NCHILD);
-    node_t* child = &m_nodes.back() - NCHILD + 1;
-    node->children.resize(8, nullptr);
-    for (int c = 0; c < 8; c++) {
-      node->children[c] = &child[c];
-      child[c].x = node->x;
-      child[c].r = node->r / 2;
-      for (int d = 0; d < 3; d++) {
-        child[c].x[d] += child[c].r * (((c & 1 << d) >> d) * 2 - 1);
+    } else {  // !isLeaf
+      m_nonleafs.push_back(node);
+      // Sort bodies and save in buffer
+      std::vector<int> source_size, source_offsets;
+      std::vector<int> target_size, target_offsets;
+      sort_bodies(node, sources, sourcesBuffer, sourcesBegin, sourcesEnd,
+                  source_size, source_offsets);  // sourcesBuffer is sorted
+      sort_bodies(node, targets, targetsBuffer, targetsBegin, targetsEnd,
+                  target_size, target_offsets);  // targetsBuffer is sorted
+      //! Loop over children and recurse
+      assert(m_nodes.capacity() >= m_nodes.size() + NCHILD);
+      m_nodes.resize(m_nodes.size() + NCHILD);
+      node_t* child = &m_nodes.back() - NCHILD + 1;
+      for (int octant = 0; octant < NCHILD; octant++) {
+        node->set_child(*child, octant);
+        build_tree(sourcesBuffer, sources, source_offsets[octant],
+                   source_offsets[octant] + source_size[octant], targetsBuffer,
+                   targets, target_offsets[octant],
+                   target_offsets[octant] + target_size[octant], &child[octant],
+                   fmm, !direction);
       }
-      child[c].parent = node;
-      child[c].octant = c;
-      child[c].level = node->level + 1;
-      build_tree(sources_buffer, sources, source_offsets[c],
-                 source_offsets[c] + source_size[c], targets_buffer, targets,
-                 target_offsets[c], target_offsets[c] + target_size[c],
-                 &child[c], fmm, !direction);
     }
   }
 
@@ -203,8 +168,8 @@ class adaptive_tree {
                    std::vector<int>& size, std::vector<int>& offsets) {
     using vec3 = typename potential_traits<potential_t>::coord_t;
     // Count number of bodies in each octant
-    size.resize(8, 0);
-    vec3 X = node->x;  // the center of the node
+    size.resize(NCHILD, 0);
+    vec3 X = node->centre();
     for (size_t i = begin; i < end; i++) {
       vec3& x = bodies[i].X;
       int octant = (x[0] > X[0]) + ((x[1] > X[1]) << 1) + ((x[2] > X[2]) << 2);
