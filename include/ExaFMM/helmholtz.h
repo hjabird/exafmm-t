@@ -89,7 +89,8 @@ class HelmholtzFmmKernel {
       const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
     const size_t numSources = static_cast<int>(sourceCoords.rows());
     const size_t numTargets = static_cast<int>(targetCoords.rows());
-    potential_vector_t<NumTargets> targetValues = potential_vector_t<NumTargets>::Zero(numTargets);
+    potential_vector_t<NumTargets> targetValues =
+        potential_vector_t<NumTargets>::Zero(numTargets);
     for (size_t i{0}; i < numTargets; ++i) {
       for (size_t j{0}; j < numSources; ++j) {
         targetValues(i) += potential_P2P(
@@ -105,22 +106,19 @@ class HelmholtzFmmKernel {
    * @param targetCoords Vector of coordinates of targets.
    * @return Vector of potentials of targets.
    */
-  inline potential_grad_t gradient_P2P(const coord_t& sourceCoord,
-                                  const coord_t& targetCoord) const noexcept {
-      auto radius = (sourceCoord - targetCoord).norm();
-      auto coeff = complex_t{ (1 + kappa.imag()) / (radius * radius),
-          -kappa.real() / radius };
-      auto potential = potential_P2P(sourceCoord, targetCoord);
-      return coeff * potential * (sourceCoord - targetCoord);
+  inline potential_grad_t gradient_P2P(
+      const coord_t& sourceCoord, const coord_t& targetCoord) const noexcept {
+    auto radius = (sourceCoord - targetCoord).norm();
+    auto coeff = complex_t{(1 + kappa.imag()) / (radius * radius),
+                           -kappa.real() / radius};
+    auto potential = potential_P2P(sourceCoord, targetCoord);
+    return coeff * potential * (sourceCoord - targetCoord);
   }
 
-
-
   inline potential_grad_t gradient_P2P(
-      const coord_t& sourceCoord,
-      const potential_t& sourceStrength,
+      const coord_t& sourceCoord, const potential_t& sourceStrength,
       const coord_t& targetCoord) const noexcept {
-      return sourceStrength * gradient_P2P(sourceCoord, targetCoord);
+    return sourceStrength * gradient_P2P(sourceCoord, targetCoord);
   }
 
   /** Compute potentials and gradients at targets induced by sources
@@ -133,20 +131,21 @@ class HelmholtzFmmKernel {
    */
   template <int NumSources, int NumTargets, int SourceRowOrder,
             int TargetRowOrder>
-      potential_grad_vector_t<NumTargets> gradient_P2P(
-          const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
-          const potential_vector_t<NumSources>& sourceStrengths,
-          const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
-      const size_t numSources = static_cast<int>(sourceCoords.rows());
-      const size_t numTargets = static_cast<int>(targetCoords.rows());
-      auto targetValues = potential_grad_vector_t<NumTargets>::Zero(numTargets);
-      for (size_t i{ 0 }; i < numTargets; ++i) {
-          for (size_t j{ 0 }; j < numSources; ++j) {
-              targetValues.row(i) += gradient_P2P(
-                  sourceCoords.row(j), sourceStrengths(j), targetCoords.row(i));
-          }
+  potential_grad_vector_t<NumTargets> gradient_P2P(
+      const coord_matrix_t<NumSources, SourceRowOrder>& sourceCoords,
+      const potential_vector_t<NumSources>& sourceStrengths,
+      const coord_matrix_t<NumTargets, TargetRowOrder>& targetCoords) {
+    const size_t numSources = static_cast<int>(sourceCoords.rows());
+    const size_t numTargets = static_cast<int>(targetCoords.rows());
+    potential_grad_vector_t<NumTargets> targetValues =
+        potential_grad_vector_t<NumTargets>::Zero(numTargets, 3);
+    for (size_t i{0}; i < numTargets; ++i) {
+      for (size_t j{0}; j < numSources; ++j) {
+        targetValues.row(i) += gradient_P2P(
+            sourceCoords.row(j), sourceStrengths(j, 1), targetCoords.row(i));
       }
-      return targetValues;
+    }
+    return targetValues;
   }
 };
 }  // namespace ExaFMM

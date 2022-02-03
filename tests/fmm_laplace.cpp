@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   stop("Evaluation");
 
 #if DEBUG /* check downward check potential at leaf level*/
-  for (auto dn_check : leafs[0]->dn_equiv) {
+  for (auto dn_check : leafs[0]->m_downEquiv) {
     std::cout << dn_check << std::endl;
   }
 #endif
