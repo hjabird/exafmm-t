@@ -126,8 +126,8 @@ class Fmm : public FmmKernel {
     const size_t numTargets = targetCoords.rows();
     // Needs to be column major for 1 column.
     using return_t =
-        Eigen::Matrix<potential_t, NumSources, NumTargets, column_major>;
-    return_t kernelMatrix = return_t::Zero(numSources, numTargets);
+        Eigen::Matrix<potential_t, NumTargets, NumSources, row_major>;
+    return_t kernelMatrix = return_t::Zero(numTargets, numSources);
 
     for (size_t i{0}; i < numTargets; ++i) {
       for (size_t j{0}; j < numSources; ++j) {
@@ -142,7 +142,7 @@ class Fmm : public FmmKernel {
   //! P2P operator.
   void P2P(nodeptrvec_t& leafs) {
     nodeptrvec_t& targets = leafs;
-#pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = targets[i];
       nodeptrvec_t& sources = target->P2Plist();
@@ -284,7 +284,7 @@ class Fmm : public FmmKernel {
     }
 
     nodevec_t targets2 = targets;  // target2 is used for direct summation
-#pragma omp parallel for
+                                   //#pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets2.size()); i++) {
       node_t* target = &targets2[i];
       target->zero_target_values();
@@ -822,7 +822,7 @@ class Fmm : public FmmKernel {
     coord_t targetCoord = coord_t::Zero();
     for (int l = 1; l < this->depth + 1; ++l) {
       // compute M2L kernel matrix, perform DFT
-#pragma omp parallel for
+      //#pragma omp parallel for
       for (int i = 0; i < static_cast<int>(REL_COORD[M2L_Helper_Type].size());
            ++i) {
         coord_t boxCentre;

@@ -247,7 +247,8 @@ class Node {
     child.m_r = m_r / 2;
     child.m_x = m_x;
     for (int d = 0; d < 3; d++) {
-      child.m_x(d) += child.m_r * (((octant & 1 << d) >> d) * 2 - 1);
+      int mul = (((octant & 1 << d) >> d) * 2 - 1);
+      child.m_x(d) += child.m_r * mul;
     }
   }
 

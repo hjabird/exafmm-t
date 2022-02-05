@@ -142,7 +142,7 @@ class adaptive_tree {
       m_nodes.resize(m_nodes.size() + NCHILD);
       node_t* child = &m_nodes.back() - NCHILD + 1;
       for (int octant = 0; octant < NCHILD; octant++) {
-        node->set_child(*child, octant);
+        node->set_child(child[octant], octant);
         build_tree(sourcesBuffer, sources, source_offsets[octant],
                    source_offsets[octant] + source_size[octant], targetsBuffer,
                    targets, target_offsets[octant],

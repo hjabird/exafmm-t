@@ -66,7 +66,11 @@ class HelmholtzFmmKernel {
   inline potential_t potential_P2P(const coord_t& sourceCoord,
                                    const coord_t& targetCoord) const noexcept {
     auto radius = (sourceCoord - targetCoord).norm();
-    return kernelCoef * std::exp(radius * kappa * complex_t{0, 1}) / radius;
+    auto potential =
+        radius == 0
+            ? 0
+            : kernelCoef * std::exp(radius * kappa * complex_t{0, 1}) / radius;
+    return potential;
   }
 
   /** Compute the effect of source with a given strength at a given coordinate.
@@ -109,8 +113,9 @@ class HelmholtzFmmKernel {
   inline potential_grad_t gradient_P2P(
       const coord_t& sourceCoord, const coord_t& targetCoord) const noexcept {
     auto radius = (sourceCoord - targetCoord).norm();
-    auto coeff = complex_t{(1 + kappa.imag()) / (radius * radius),
-                           -kappa.real() / radius};
+    auto coeff = radius == 0 ? 0
+                             : complex_t{(1 + kappa.imag()) / (radius * radius),
+                                         -kappa.real() / radius};
     auto potential = potential_P2P(sourceCoord, targetCoord);
     return coeff * potential * (sourceCoord - targetCoord);
   }
@@ -142,7 +147,7 @@ class HelmholtzFmmKernel {
     for (size_t i{0}; i < numTargets; ++i) {
       for (size_t j{0}; j < numSources; ++j) {
         targetValues.row(i) += gradient_P2P(
-            sourceCoords.row(j), sourceStrengths(j, 1), targetCoords.row(i));
+            sourceCoords.row(j), sourceStrengths(j, 0), targetCoords.row(i));
       }
     }
     return targetValues;
