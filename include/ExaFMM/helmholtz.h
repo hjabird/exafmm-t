@@ -54,9 +54,7 @@ class HelmholtzFmmKernel {
   HelmholtzFmmKernel() = delete;
 
   HelmholtzFmmKernel(kernel_args_t kernelArgs)
-      : wavek{std::get<0>(kernelArgs)},
-        kappa{wavek / complex_t{16}},
-        kernelCoef{real_t(1) / (64 * PI)} {};
+      : wavek{std::get<0>(kernelArgs)}, kernelCoef{real_t(1) / (4 * PI)} {};
 
   /** Compute the effect of source with a given strength at a given coordinate.
    * @param sourceCoord The coordinate of the source particle.
@@ -65,11 +63,11 @@ class HelmholtzFmmKernel {
    **/
   inline potential_t potential_P2P(const coord_t& sourceCoord,
                                    const coord_t& targetCoord) const noexcept {
-    auto radius = (sourceCoord - targetCoord).norm();
+    auto radius = (targetCoord - sourceCoord).norm();
     auto potential =
         radius == 0
             ? 0
-            : kernelCoef * std::exp(radius * kappa * complex_t{0, 1}) / radius;
+            : kernelCoef * std::exp(radius * wavek * complex_t{0, 1}) / radius;
     return potential;
   }
 
@@ -97,8 +95,8 @@ class HelmholtzFmmKernel {
         potential_vector_t<NumTargets>::Zero(numTargets);
     for (size_t i{0}; i < numTargets; ++i) {
       for (size_t j{0}; j < numSources; ++j) {
-        targetValues(i) += potential_P2P(
-            sourceCoords.row(j), sourceStrengths(j), targetCoords.row(i));
+        targetValues(i, 0) += potential_P2P(
+            sourceCoords.row(j), sourceStrengths(j, 0), targetCoords.row(i));
       }
     }
     return targetValues;
@@ -114,10 +112,10 @@ class HelmholtzFmmKernel {
       const coord_t& sourceCoord, const coord_t& targetCoord) const noexcept {
     auto radius = (sourceCoord - targetCoord).norm();
     auto coeff = radius == 0 ? 0
-                             : complex_t{(1 + kappa.imag()) / (radius * radius),
-                                         -kappa.real() / radius};
+                             : (radius * complex_t{0, 1} * wavek - real_t{1}) /
+                                   (radius * radius);
     auto potential = potential_P2P(sourceCoord, targetCoord);
-    return coeff * potential * (sourceCoord - targetCoord);
+    return coeff * potential * (targetCoord - sourceCoord);
   }
 
   inline potential_grad_t gradient_P2P(

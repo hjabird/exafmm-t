@@ -113,9 +113,9 @@ potential_traits<PotentialT>::coord_matrix_t<dynamic> convolution_grid(
   int n2 = n1 * n1;
   int n3 = n1 * n1 * n1;
   potential_traits<PotentialT>::coord_matrix_t<dynamic> gridCoords(n3, 3);
-  for (size_t i = 0; i < n1; i++) {
-    for (size_t j = 0; j < n1; j++) {
-      for (size_t k = 0; k < n1; k++) {
+  for (int i = 0; i < n1; i++) {
+    for (int j = 0; j < n1; j++) {
+      for (int k = 0; k < n1; k++) {
         gridCoords.row(i + n1 * j + n2 * k) =
             coord_t({(i - p) * a / (p - 1), (j - p) * a / (p - 1),
                      (k - p) * a / (p - 1)});
