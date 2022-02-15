@@ -673,7 +673,7 @@ class Fmm : public FmmKernel {
     }
 
     for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
-#pragma omp parallel for
+      //#pragma omp parallel for
       for (int k = 0; k < this->nfreq; k++) {
         for (size_t ipos = 0; ipos < npos; ipos++) {
           size_t iblk_inter = iblk_trg * npos + ipos;
@@ -690,12 +690,26 @@ class Fmm : public FmmKernel {
                          [k * 2 * NCHILD *
                           NCHILD];  // k-th freq's (row) offset in matrix_M2L
           for (size_t j = 0; j < interaction_count; j += 2) {
-            real_t* M_ = M;
-            real_t* IN0 = IN[j + 0] + k * NCHILD * 2;  // go to k-th freq chunk
-            real_t* IN1 = IN[j + 1] + k * NCHILD * 2;
-            real_t* OUT0 = OUT[j + 0] + k * NCHILD * 2;
-            real_t* OUT1 = OUT[j + 1] + k * NCHILD * 2;
-            matmult_8x8x2(M_, IN0, IN1, OUT0, OUT1);
+            complex_t* M_ = reinterpret_cast<complex_t*>(M);
+            complex_t* IN0 = reinterpret_cast<complex_t*>(
+                IN[j + 0] + k * NCHILD * 2);  // go to k-th freq chunk
+            complex_t* IN1 =
+                reinterpret_cast<complex_t*>(IN[j + 1] + k * NCHILD * 2);
+            complex_t* OUT0 =
+                reinterpret_cast<complex_t*>(OUT[j + 0] + k * NCHILD * 2);
+            complex_t* OUT1 =
+                reinterpret_cast<complex_t*>(OUT[j + 1] + k * NCHILD * 2);
+            using l_matrix_t = Eigen::Matrix<complex_t, 8, 8, column_major>;
+            using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
+            using l_mapped_matrix_t = Eigen::Map<l_matrix_t>;
+            using l_mapped_vector_t = Eigen::Map<l_vector_t>;
+            auto mat = l_mapped_matrix_t(M_);
+            auto in0 = l_mapped_vector_t(IN0);
+            auto in1 = l_mapped_vector_t(IN1);
+            auto out0 = l_mapped_vector_t(OUT0);
+            auto out1 = l_mapped_vector_t(OUT1);
+            out0 += mat * in0;
+            out1 += mat * in1;
           }
         }
       }
