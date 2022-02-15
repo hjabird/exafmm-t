@@ -27,7 +27,6 @@
 
 #include "align.h"
 #include "args.h"
-#include "vec.h"
 
 namespace ExaFMM {
 
@@ -152,15 +151,7 @@ using fft_plan = fftw_plan;
 
 const real_t PI = atan(1) * 4;           // M_PI;
 using complex_t = std::complex<real_t>;  //!< Complex number type
-typedef vec<3, int> ivec3;               //!< Vector of 3 int types
-typedef vec<3, real_t> vec3;             //!< Vector of 3 real_t types
-typedef vec<3, complex_t> cvec3;         //!< Vector of 3 complex_t types
-
-//! SIMD vector types for AVX512, AVX, and SSE
-const int NSIMD =
-    SIMD_BYTES /
-    int(sizeof(real_t));  //!< SIMD vector length (SIMD_BYTES defined in vec.h)
-typedef vec<NSIMD, real_t> simdvec;  //!< SIMD vector of NSIMD real_t types
+typedef Eigen::Vector3i ivec3;           //!< Vector of 3 int types
 
 typedef std::vector<real_t> RealVec;        //!< Vector of real_t types
 typedef std::vector<complex_t> ComplexVec;  //!< Vector of complex_t types
@@ -186,10 +177,10 @@ typedef enum {
 template <typename T>
 struct Body {
   int ibody;  //!< Initial body numbering for sorting back
-  typename potential_traits<T>::coord_t X;  //!< Coordinates
-  T q;                                      //!< Charge
-  T p;                                      //!< Potential
-  vec<3, T> F;                              //!< Gradient
+  typename potential_traits<T>::coord_t X;           //!< Coordinates
+  T q;                                               //!< Charge
+  T p;                                               //!< Potential
+  typename potential_traits<T>::potential_grad_t F;  //!< Gradient
 };
 template <typename T>
 using Bodies = std::vector<Body<T>>;  //!< Vector of nodes

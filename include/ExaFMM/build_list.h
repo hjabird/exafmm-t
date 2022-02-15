@@ -101,10 +101,10 @@ bool is_adjacent(uint64_t key_a, uint64_t key_b) {
   int max_level = max(level_a, level_b);
   ivec3 iX_a = get3DIndex(key_a);
   ivec3 iX_b = get3DIndex(key_b);
-  ivec3 iX_ac =
-      (iX_a * 2 + 1) * (1 << (max_level - level_a));  // center coordinates
-  ivec3 iX_bc =
-      (iX_b * 2 + 1) * (1 << (max_level - level_b));  // center coordinates
+  ivec3 iX_ac = (iX_a * 2 + ivec3{1, 1, 1}) *
+                (1 << (max_level - level_a));  // center coordinates
+  ivec3 iX_bc = (iX_b * 2 + ivec3{1, 1, 1}) *
+                (1 << (max_level - level_b));  // center coordinates
   ivec3 diff = iX_ac - iX_bc;
   int max_diff = -1;  // L-infinity norm of diff
   for (int d = 0; d < 3; ++d) {
@@ -135,8 +135,8 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
   node_t* curr = node;
   if (curr->key() != 0) {
     node_t* parent = curr->parent();
-    ivec3 min_iX = 0;
-    ivec3 max_iX = 1 << node->level();
+    ivec3 min_iX = {0, 0, 0};
+    ivec3 max_iX = ivec3::Ones(3) * (1 << node->level());
     ivec3 curr_iX = get3DIndex(curr->key());
     ivec3 parent_iX = get3DIndex(parent->key());
     // search in every direction
@@ -148,7 +148,8 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
           direction[1] = j;
           direction[2] = k;
           direction += parent_iX * 2;
-          if (direction >= min_iX && direction < max_iX &&
+          if ((direction.array() >= min_iX.array()).all() &&
+              (direction.array() < max_iX.array()).all() &&
               direction != curr_iX) {
             uint64_t res_key = find_key(direction, curr->level(), leaf_keys);
             bool adj = is_adjacent(res_key, curr->key());
@@ -233,8 +234,8 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
   using node_t = Node<T>;
   node->M2Llist().resize(REL_COORD[M2L_Type].size(), nullptr);
   node_t* curr = node;
-  ivec3 min_iX = 0;
-  ivec3 max_iX = 1 << curr->level();
+  ivec3 min_iX = {0, 0, 0};
+  ivec3 max_iX = ivec3::Ones(3) * (1 << curr->level());
   if (!node->is_leaf()) {
     ivec3 curr_iX = get3DIndex(curr->key());
     ivec3 col_iX;
@@ -247,7 +248,8 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
           rel_coord[2] = k;
           if (i || j || k) {  // exclude current node itself
             col_iX = curr_iX + rel_coord;
-            if (col_iX >= min_iX && col_iX < max_iX) {
+            if ((col_iX.array() >= min_iX.array()).all() &&
+                (col_iX.array() < max_iX.array()).all()) {
               uint64_t col_key = getKey(col_iX, curr->level(), true);
               if (key2id.find(col_key) != key2id.end()) {
                 node_t* col = &nodes[key2id.at(col_key)];
