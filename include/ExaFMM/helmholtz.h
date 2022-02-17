@@ -14,6 +14,7 @@
 #include "exafmm.h"
 #include "fmm.h"
 #include "geometry.h"
+#include "potential_traits.h"
 #include "timer.h"
 
 namespace ExaFMM {
