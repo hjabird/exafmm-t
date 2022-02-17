@@ -16,7 +16,6 @@
 
 #include <set>
 
-#include "align.h"
 #include "args.h"
 #include "fft.h"
 #include "node.h"
@@ -34,10 +33,7 @@ typedef Eigen::Vector3i ivec3;           //!< Vector of 3 int types
 
 typedef std::vector<real_t> RealVec;        //!< Vector of real_t types
 typedef std::vector<complex_t> ComplexVec;  //!< Vector of complex_t types
-typedef AlignedAllocator<real_t, MEM_ALIGN>
-    AlignAllocator;  //!< Allocator for memory alignment
-typedef std::vector<real_t, AlignAllocator>
-    AlignedVec;  //!< Aligned vector of real_t types
+typedef std::vector<real_t> AlignedVec;     //!< Aligned vector of real_t types
 
 //! Interaction types that need to be pre-computed.
 typedef enum {

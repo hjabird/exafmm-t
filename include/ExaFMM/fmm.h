@@ -133,7 +133,7 @@ class Fmm : public FmmKernel {
       for (size_t j{0}; j < numTargets; ++j) {
         // Is row / column the correct way round?
         kernelMatrix(i, j) =
-            potential_P2P(sourceCoords.row(i), targetCoords.row(j));
+            this->potential_P2P(sourceCoords.row(i), targetCoords.row(j));
       }
     }
     return kernelMatrix;
@@ -148,12 +148,12 @@ class Fmm : public FmmKernel {
       nodeptrvec_t& sources = target->P2Plist();
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        target->target_potentials() +=
-            potential_P2P(source->source_coords(), source->source_strengths(),
-                          target->target_coords());
-        target->target_gradients() +=
-            gradient_P2P(source->source_coords(), source->source_strengths(),
-                         target->target_coords());
+        target->target_potentials() += this->potential_P2P(
+            source->source_coords(), source->source_strengths(),
+            target->target_coords());
+        target->target_gradients() += this->gradient_P2P(
+            source->source_coords(), source->source_strengths(),
+            target->target_coords());
       }
     }
   }
@@ -179,9 +179,9 @@ class Fmm : public FmmKernel {
         // source node's equiv coord = relative equiv coord + node's center
         coord_matrix_t<> sourceEquivCoords{upEquivSurf[level]};
         sourceEquivCoords.rowwise() += source->centre();
-        target->target_potentials() = potential_P2P(
+        target->target_potentials() = this->potential_P2P(
             sourceEquivCoords, source->up_equiv(), target->target_coords());
-        target->target_gradients() = gradient_P2P(
+        target->target_gradients() = this->gradient_P2P(
             sourceEquivCoords, source->up_equiv(), target->target_coords());
       }
     }
@@ -210,8 +210,8 @@ class Fmm : public FmmKernel {
         targetCheckCoords = dn_check_surf[level];
         targetCheckCoords.rowwise() += target->centre();
         target->down_equiv() =
-            potential_P2P(source->source_coords(), source->source_strengths(),
-                          targetCheckCoords);
+            this->potential_P2P(source->source_coords(),
+                                source->source_strengths(), targetCheckCoords);
       }
     }
   }
@@ -289,12 +289,12 @@ class Fmm : public FmmKernel {
       node_t* target = &targets2[i];
       target->zero_target_values();
       for (size_t j = 0; j < leafs.size(); j++) {
-        target->target_potentials() += potential_P2P(
+        target->target_potentials() += this->potential_P2P(
             leafs[j]->source_coords(), leafs[j]->source_strengths(),
             target->target_coords());
-        target->target_gradients() +=
-            gradient_P2P(leafs[j]->source_coords(),
-                         leafs[j]->source_strengths(), target->target_coords());
+        target->target_gradients() += this->gradient_P2P(
+            leafs[j]->source_coords(), leafs[j]->source_strengths(),
+            target->target_coords());
       }
     }
 
@@ -401,7 +401,7 @@ class Fmm : public FmmKernel {
     size_t size_M2L = this->nfreq * 2 * NCHILD * NCHILD;
     size_t file_size =
         (2 * REL_COORD[M2M_Type].size() + 4) * nsurf_ * nsurf_ * (depth_ + 1) *
-            sizeof(T) +
+            sizeof(potential_t) +
         REL_COORD[M2L_Type].size() * size_M2L * depth_ * sizeof(real_t) +
         1 * sizeof(real_t);  // +1 denotes r0
     std::ifstream file(this->filename, std::ifstream::binary);
@@ -653,7 +653,7 @@ class Fmm : public FmmKernel {
     }
 
 #pragma omp parallel for
-    for (int iblk_inter{0}; iblk_inter < static_cast<int>(nblk_inter);
+    for (int iblk_inter = 0; iblk_inter < static_cast<int>(nblk_inter);
          iblk_inter++) {
       size_t interaction_count_offset0 =
           (iblk_inter == 0 ? 0 : interaction_count_offset[iblk_inter - 1]);
@@ -719,8 +719,6 @@ class Fmm : public FmmKernel {
   void M2L(nodevec_t& nodes) {
     const int nsurf_ = this->nsurf;
     const int nfreq_ = this->nfreq;
-    EXAFMM_ASSERT(nsurf_ > 0);
-    EXAFMM_ASSERT(nfreq_ > 0);
     int fft_size = 2 * NCHILD * nfreq_;
     size_t nnodes = nodes.size();
     size_t npos = REL_COORD[M2L_Type].size();  // number of relative positions
@@ -816,9 +814,6 @@ class Fmm : public FmmKernel {
     int n1 = this->p * 2;
     int nconv_ = this->nconv;
     int nfreq_ = this->nfreq;
-    EXAFMM_ASSERT(n1 > 0);
-    EXAFMM_ASSERT(nconv_ > 0);
-    EXAFMM_ASSERT(nfreq_ > 0);
     int fft_size = 2 * nfreq_ * NCHILD * NCHILD;
     std::vector<RealVec> matrix_M2L_Helper(REL_COORD[M2L_Helper_Type].size(),
                                            RealVec(2 * nfreq_));
@@ -984,9 +979,6 @@ class Fmm : public FmmKernel {
 //  int n1 = this->p * 2;
 //  int nconv_ = this->nconv;
 //  int nfreq_ = this->nfreq;
-//  EXAFMM_ASSERT(n1 > 0);
-//  EXAFMM_ASSERT(nconv_ > 0);
-//  EXAFMM_ASSERT(nfreq_ > 0);
 //  int fft_size = 2 * nfreq_ * NCHILD * NCHILD;
 //  std::vector<RealVec> matrix_M2L_Helper(REL_COORD[M2L_Helper_Type].size(),
 //                                         RealVec(2 * nfreq_));
@@ -1052,9 +1044,6 @@ class Fmm : public FmmKernel {
 //  int n1 = this->p * 2;
 //  int nconv_ = this->nconv;
 //  int nfreq_ = this->nfreq;
-//  EXAFMM_ASSERT(n1 > 0);
-//  EXAFMM_ASSERT(nconv_ > 0);
-//  EXAFMM_ASSERT(nfreq_ > 0);
 //  int fft_size = 2 * nfreq_ * NCHILD * NCHILD;
 //  std::vector<RealVec> matrix_M2L_Helper(REL_COORD[M2L_Helper_Type].size(),
 //                                         RealVec(2 * nfreq_));

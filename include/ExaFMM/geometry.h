@@ -42,10 +42,6 @@ box_surface_coordinates(
     int p, typename potential_traits<PotentialT>::real_t r0, int level,
     typename potential_traits<PotentialT>::coord_t boxCentre,
     typename potential_traits<PotentialT>::real_t alpha) {
-  EXAFMM_ASSERT(p > 0);
-  EXAFMM_ASSERT(r0 > 0);
-  EXAFMM_ASSERT(level >= 0);
-  EXAFMM_ASSERT(alpha > 0);
   using coord_t = typename potential_traits<PotentialT>::coord_t;
   using coord_matrix_t =
       typename potential_traits<PotentialT>::template coord_matrix_t<dynamic>;
@@ -98,12 +94,10 @@ box_surface_coordinates(
  * @return Vector of coordinates of convolution grid.
  */
 template <typename PotentialT>
-potential_traits<PotentialT>::coord_matrix_t<dynamic> convolution_grid(
-    int p, typename potential_traits<PotentialT>::real_t r0, int level,
-    typename potential_traits<PotentialT>::coord_t& boxCentre) {
-  EXAFMM_ASSERT(p > 0);
-  EXAFMM_ASSERT(r0 > 0);
-  EXAFMM_ASSERT(level >= 0);
+typename potential_traits<PotentialT>::template coord_matrix_t<dynamic>
+convolution_grid(int p, typename potential_traits<PotentialT>::real_t r0,
+                 int level,
+                 typename potential_traits<PotentialT>::coord_t& boxCentre) {
   using real_t = typename potential_traits<PotentialT>::real_t;
   using coord_t = typename potential_traits<PotentialT>::coord_t;
 
@@ -112,7 +106,8 @@ potential_traits<PotentialT>::coord_matrix_t<dynamic> convolution_grid(
   int n1 = p * 2;
   int n2 = n1 * n1;
   int n3 = n1 * n1 * n1;
-  potential_traits<PotentialT>::coord_matrix_t<dynamic> gridCoords(n3, 3);
+  typename potential_traits<PotentialT>::template coord_matrix_t<dynamic>
+      gridCoords(n3, 3);
   for (int i = 0; i < n1; i++) {
     for (int j = 0; j < n1; j++) {
       for (int k = 0; k < n1; k++) {
@@ -137,7 +132,6 @@ template <typename PotentialT>
 std::vector<int> generate_surf2conv_up(int p) {
   using real_t = typename potential_traits<PotentialT>::real_t;
   using coord_t = typename potential_traits<PotentialT>::coord_t;
-  EXAFMM_ASSERT(p > 0);
   int n1 = 2 * p;
   coord_t c = coord_t::Ones(3) * 0.5 * (p - 1);
   auto surf = box_surface_coordinates<PotentialT>(p, 0.5, 0, c, real_t(p - 1));
@@ -162,7 +156,6 @@ template <typename PotentialT>
 std::vector<int> generate_surf2conv_dn(int p) {
   using real_t = typename potential_traits<PotentialT>::real_t;
   using coord_t = typename potential_traits<PotentialT>::coord_t;
-  EXAFMM_ASSERT(p > 0);
   int n1 = 2 * p;
   coord_t c;
   for (int d = 0; d < 3; d++) {

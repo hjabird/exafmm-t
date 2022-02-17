@@ -26,16 +26,17 @@ template <typename PotentialT>
 class Node {
  private:
   using pt = potential_traits<PotentialT>;
+  static constexpr int NCHILD{8};
 
  public:
   using potential_t = PotentialT;
   using real_t = typename pt::real_t;
-  using potential_vector_t = typename pt::potential_vector_t<>;
+  using potential_vector_t = typename pt::template potential_vector_t<dynamic>;
   using potential_grad_vector_t =
       typename pt::template potential_grad_vector_t<dynamic>;
   using coord_t = typename pt::coord_t;
-  using coord_matrix_t = typename pt::coord_matrix_t<>;
-  using node_t = typename Node<potential_t>;
+  using coord_matrix_t = typename pt::template coord_matrix_t<dynamic>;
+  using node_t = Node<potential_t>;
   using nodeptrvec_t = std::vector<node_t*>;
 
   Node()

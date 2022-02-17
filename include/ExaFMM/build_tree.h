@@ -33,8 +33,8 @@ using std::max;
 template <typename PotentialT>
 auto get_bounds(const std::vector<Body<PotentialT>>& sources,
                 const std::vector<Body<PotentialT>>& targets) {
-  potential_traits<PotentialT>::coord_t xMin(sources[0].X);
-  potential_traits<PotentialT>::coord_t xMax(sources[0].X);
+  typename potential_traits<PotentialT>::coord_t xMin(sources[0].X);
+  typename potential_traits<PotentialT>::coord_t xMax(sources[0].X);
   for (size_t b = 0; b < sources.size(); ++b) {
     xMin = sources[b].X.cwiseMin(xMin);
     xMax = sources[b].X.cwiseMax(xMax);
@@ -43,8 +43,9 @@ auto get_bounds(const std::vector<Body<PotentialT>>& sources,
     xMin = targets[b].X.cwiseMin(xMin);
     xMax = targets[b].X.cwiseMax(xMax);
   }
-  potential_traits<PotentialT>::coord_t x0 = (xMax + xMin) / 2;
-  potential_traits<PotentialT>::real_t r0 = (x0 - xMin).cwiseAbs().maxCoeff();
+  typename potential_traits<PotentialT>::coord_t x0 = (xMax + xMin) / 2;
+  typename potential_traits<PotentialT>::real_t r0 =
+      (x0 - xMin).cwiseAbs().maxCoeff();
   r0 *= 1.00001;
   return std::make_tuple(x0, r0);
 }
@@ -53,9 +54,9 @@ template <class FmmT>
 class adaptive_tree {
  public:
   using potential_t = typename FmmT::potential_t;
-  using node_t = typename Node<potential_t>;
-  using nodevec_t = typename std::vector<node_t>;
-  using nodeptrvec_t = typename std::vector<node_t*>;
+  using node_t = Node<potential_t>;
+  using nodevec_t = std::vector<node_t>;
+  using nodeptrvec_t = std::vector<node_t*>;
   using body_t = Body<potential_t>;
   using bodies_t = std::vector<body_t>;
 
