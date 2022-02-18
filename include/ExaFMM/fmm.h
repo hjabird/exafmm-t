@@ -23,12 +23,13 @@
 #include "exafmm.h"
 #include "geometry.h"
 #include "timer.h"
+#include "p2p_methods.h"
 
 namespace ExaFMM {
 
 //! Base FMM class
 template <class FmmKernel>
-class Fmm : public FmmKernel {
+class Fmm : public p2p_methods<FmmKernel> {
  public:
   using potential_t = typename FmmKernel::potential_t;
 
@@ -79,7 +80,7 @@ class Fmm : public FmmKernel {
 
   Fmm(int p_, int ncrit_, fmm_kernel_funcs_arg_t kernelArguments,
       std::string filename_ = std::string("myPrecomputationMatrix.dat"))
-      : FmmKernel{kernelArguments},
+      : p2p_methods<FmmKernel>{kernelArguments},
         p{p_},
         ncrit{ncrit_},
         filename{filename_},
@@ -131,7 +132,6 @@ class Fmm : public FmmKernel {
 
     for (size_t i{0}; i < numSources; ++i) {
       for (size_t j{0}; j < numTargets; ++j) {
-        // Is row / column the correct way round?
         kernelMatrix(i, j) =
             this->potential_P2P(sourceCoords.row(i), targetCoords.row(j));
       }

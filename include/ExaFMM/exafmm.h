@@ -13,6 +13,7 @@
 #define INCLUDE_EXAFMM_EXAFMM_H_
 
 #include <omp.h>
+#include <cmath>
 
 #include <set>
 
@@ -27,7 +28,7 @@ const int MEM_ALIGN = 64;
 const int CACHE_SIZE = 512;
 const int NCHILD = 8;
 
-const real_t PI = atan(1) * 4;           // M_PI;
+static constexpr auto PI = real_t(3.141592653589793238462643383279502884);
 using complex_t = std::complex<real_t>;  //!< Complex number type
 typedef Eigen::Vector3i ivec3;           //!< Vector of 3 int types
 

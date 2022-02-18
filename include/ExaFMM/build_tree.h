@@ -100,7 +100,8 @@ class adaptive_tree {
     const size_t numSources = sourcesEnd - sourcesBegin;
     const size_t numTargets = targetsEnd - targetsBegin;
     const bool isLeaf{numSources <= fmm.ncrit && numTargets <= fmm.ncrit};
-    node->set_num_sources_and_targets(numSources, numTargets, isLeaf);
+    node->set_num_sources_and_targets(static_cast<int>(numSources), 
+        static_cast<int>(numTargets), isLeaf);
     node->set_num_surfs(fmm.nsurf);
     const ivec3 iX =
         get3DIndex<potential_t>(node->centre(), node->level(), fmm.x0, fmm.r0);
