@@ -30,6 +30,7 @@ class HelmholtzFmmKernel {
 
  private:
   using pt = potential_traits<potential_t>;
+  using real_t = typename pt::real_t;
   using complex_t = typename pt::complex_t;
   using coord_t = typename pt::coord_t;
   using potential_grad_t = typename pt::potential_grad_t;

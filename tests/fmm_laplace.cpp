@@ -1,4 +1,3 @@
-#pragma once
 /******************************************************************************
  *
  * ExaFMM
@@ -40,15 +39,17 @@ int main(int argc, char **argv) {
 #endif
 
   start("Build Tree");
-  get_bounds(sources, targets, fmm.x0, fmm.r0);
-  NodePtrs<real_t> leafs, nonleafs;
-  Nodes<real_t> nodes = build_tree(sources, targets, leafs, nonleafs, fmm);
+  auto [boxCentre, boxHalfSide] =
+      get_bounds<LaplaceFmm::potential_t>(sources, targets);
+  fmm.x0 = boxCentre;
+  fmm.r0 = boxHalfSide;
+  adaptive_tree tree(sources, targets, fmm);
   stop("Build Tree");
 
   init_rel_coord();
 
   start("Build Lists");
-  build_list(nodes, fmm);
+  build_list(tree.nodes(), fmm);
   stop("Build Lists");
 
   start("Precomputation");
@@ -56,13 +57,11 @@ int main(int argc, char **argv) {
   stop("Precomputation");
 
   start("M2L Setup");
-  fmm.M2L_setup(nonleafs);
+  fmm.M2L_setup(tree.nonleaves());
   stop("M2L Setup");
-
-  start("Evaluation");
-  fmm.upward_pass(nodes, leafs);
-  fmm.downward_pass(nodes, leafs);
-  stop("Evaluation");
+  fmm.upward_pass(tree.nodes(), tree.leaves());
+  fmm.downward_pass(tree.nodes(), tree.leaves());
+  stop("Total");
 
 #if DEBUG /* check downward check potential at leaf level*/
   for (auto dn_check : leafs[0]->m_downEquiv) {
@@ -73,7 +72,7 @@ int main(int argc, char **argv) {
   print("Evaluation Gflop", (float)m_flop / 1e9);
 
   bool sample = (args.numBodies >= 10000);
-  RealVec err = fmm.verify(leafs, sample);
+  RealVec err = fmm.verify(tree.leaves(), sample);
   print_divider("Error");
   print("Potential Error L2", err[0]);
   print("Gradient Error L2", err[1]);
@@ -84,7 +83,7 @@ int main(int argc, char **argv) {
   print("Root Center z", fmm.x0[2]);
   print("Root Radius R", fmm.r0);
   print("Tree Depth", fmm.depth);
-  print("Leaf Nodes", leafs.size());
+  print("Leaf Nodes", tree.leaves().size());
 
   return 0;
 }
