@@ -17,7 +17,6 @@
 namespace ExaFMM {
 #if FLOAT
 typedef float real_t;  //!< Real number type
-const real_t EPS = 1e-8f;
 typedef fftwf_complex fft_complex;
 typedef fftwf_plan fft_plan;
 #define fft_plan_dft fftwf_plan_dft
@@ -32,7 +31,6 @@ typedef fftwf_plan fft_plan;
 #define fft_flops fftwf_flops
 #else
 using real_t = double;  //!< Real number type
-const real_t EPS = 1e-16;
 using fft_complex = fftw_complex;
 using fft_plan = fftw_plan;
 #define fft_plan_dft fftw_plan_dft
@@ -46,6 +44,6 @@ using fft_plan = fftw_plan;
 #define fft_destroy_plan fftw_destroy_plan
 #define fft_flops fftw_flops
 #endif
-} // namespace ExaFMM
+}  // namespace ExaFMM
 
-#endif // INCLUDE_EXAFMM_FFT_H_
+#endif  // INCLUDE_EXAFMM_FFT_H_

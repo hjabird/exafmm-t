@@ -801,8 +801,9 @@ class Fmm : public p2p_methods<FmmKernel> {
           singularDiag.data(), singularDiag.data() + singularDiag.size(), 0.,
           [](auto a1, auto a2) { return std::max(a1, a2); });
       for (int i = 0; i < nsurf_; i++) {
-        singularDiag(i) =
-            singularDiag(i) > EPS * max_S * 4 ? 1.0 / singularDiag(i) : 0.0;
+        singularDiag(i) = singularDiag(i) > pt::epsilon * max_S * 4
+                              ? 1.0 / singularDiag(i)
+                              : 0.0;
       }
       auto S_inv = singularDiag.asDiagonal();
       matrix_UC2E_U[level] = U.adjoint();
