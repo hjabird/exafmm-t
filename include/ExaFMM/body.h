@@ -17,23 +17,23 @@
 #include "potential_traits.h"
 
 namespace ExaFMM {
-	
+
 /**
  * @brief Structure of bodies.
  *
- * @tparam T Value type of sources and targets (real or complex).
+ * @tparam PotentialT Value type of sources and targets (real or complex).
  */
-template <typename T>
+template <typename PotentialT>
 struct Body {
   int ibody;  //!< Initial body numbering for sorting back
-  typename potential_traits<T>::coord_t X;           //!< Coordinates
-  T q;                                               //!< Charge
-  T p;                                               //!< Potential
-  typename potential_traits<T>::potential_grad_t F;  //!< Gradient
+  typename potential_traits<PotentialT>::coord_t X;           //!< Coordinates
+  PotentialT q;                                               //!< Charge
+  PotentialT p;                                               //!< Potential
+  typename potential_traits<PotentialT>::potential_grad_t F;  //!< Gradient
 };
 
-template <typename T>
-using Bodies = std::vector<Body<T>>;  //!< Vector of nodes
-} // namespace ExaFMM
+template <typename PotentialT>
+using Bodies = std::vector<Body<PotentialT>>;  //!< Vector of nodes
+}  // namespace ExaFMM
 
-#endif // INCLUDE_EXAFMM_BODY_H_
+#endif  // INCLUDE_EXAFMM_BODY_H_

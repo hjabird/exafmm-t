@@ -26,6 +26,7 @@ int main(int argc, char **argv) {
 
   omp_set_num_threads(args.threads);
 
+  using real_t = double;
   print_divider("Time");
   Bodies<real_t> sources =
       init_sources<real_t>(args.numBodies, args.distribution, 0);
@@ -72,7 +73,7 @@ int main(int argc, char **argv) {
   print("Evaluation Gflop", (float)m_flop / 1e9);
 
   bool sample = (args.numBodies >= 10000);
-  RealVec err = fmm.verify(tree.leaves(), sample);
+  std::vector<real_t> err = fmm.verify(tree.leaves(), sample);
   print_divider("Error");
   print("Potential Error L2", err[0]);
   print("Gradient Error L2", err[1]);

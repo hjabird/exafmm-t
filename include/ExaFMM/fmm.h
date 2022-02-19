@@ -104,7 +104,7 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_M2M;
   std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_L2L;
 
-  std::vector<M2LData> m2ldata;
+  std::vector<M2LData<real_t>> m2ldata;
 
  public:
   /** Compute the kernel matrix of a given kernel.
@@ -270,7 +270,7 @@ class Fmm : public p2p_methods<FmmKernel> {
    * @param sample Sample only some values, reducing computational cost.
    * @return The relative error of potential and gradient in L2 norm.
    */
-  RealVec verify(nodeptrvec_t& leafs, bool sample = false) {
+  std::vector<real_t> verify(nodeptrvec_t& leafs, bool sample = false) {
     nodevec_t targets;  // vector of target nodes
     if (sample) {
       int nsamples = 10;
@@ -312,7 +312,7 @@ class Fmm : public p2p_methods<FmmKernel> {
           (targets2[i].target_gradients() - targets[i].target_gradients())
               .squaredNorm();
     }
-    RealVec err(2);
+    std::vector<real_t> err(2);
     err[0] = sqrt(potentialDiff / potentialNorm);
     err[1] = sqrt(gradientDiff / gradientNorm);
     return err;
@@ -824,8 +824,8 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<std::vector<real_t>> matrix_M2L(REL_COORD[M2L_Type].size(),
                                                 std::vector<real_t>(fft_size));
     // create fft plan
-    RealVec fftw_in(nconv_);
-    RealVec fftw_out(2 * nfreq_);
+    std::vector<real_t> fftw_in(nconv_);
+    std::vector<real_t> fftw_out(2 * nfreq_);
     int dim[3] = {n1, n1, n1};
 
     fft_plan plan;
@@ -902,7 +902,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     auto map = generate_surf2conv_up<potential_t>(p);
 
     size_t fft_size = 2 * NCHILD * nfreq_;
-    ComplexVec fftw_in(nconv_ * NCHILD);
+    std::vector<complex_t> fftw_in(nconv_ * NCHILD);
     std::vector<real_t> fftw_out(fft_size);
     int dim[3] = {n1, n1, n1};
     fft_plan plan;
@@ -920,7 +920,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size());
          node_idx++) {
-      RealVec buffer(fft_size, 0);
+      std::vector<real_t> buffer(fft_size, 0);
       std::vector<potential_t> equiv_t(NCHILD * nconv_, potential_t(0.));
 
       potential_t* up_equiv =
@@ -983,7 +983,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(ifft_offset.size());
          node_idx++) {
-      RealVec buffer0(fft_size, 0);
+      std::vector<real_t> buffer0(fft_size, 0);
       std::vector<potential_t> buffer1(NCHILD * nconv_, 0);
       real_t* dn_check_f = &fft_out[fft_size * node_idx];
       potential_t* dn_equiv = &all_dn_equiv[ifft_offset[node_idx]];

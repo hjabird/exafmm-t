@@ -28,12 +28,8 @@ const int MEM_ALIGN = 64;
 const int CACHE_SIZE = 512;
 const int NCHILD = 8;
 
-static constexpr auto PI = real_t(3.141592653589793238462643383279502884);
-using complex_t = std::complex<real_t>;  //!< Complex number type
-typedef Eigen::Vector3i ivec3;           //!< Vector of 3 int types
-
-typedef std::vector<real_t> RealVec;        //!< Vector of real_t types
-typedef std::vector<complex_t> ComplexVec;  //!< Vector of complex_t types
+static constexpr auto PI = double(3.141592653589793238462643383279502884);
+typedef Eigen::Vector3i ivec3;  //!< Vector of 3 int types
 
 //! Interaction types that need to be pre-computed.
 typedef enum {
@@ -49,12 +45,13 @@ using Keys =
     std::vector<std::set<uint64_t>>;  //!< Vector of Morton keys of each level
 
 //! M2L setup data
+template <typename RealT>
 struct M2LData {
   std::vector<size_t>
       fft_offset;  // source's first child's upward_equiv's displacement
   std::vector<size_t>
       ifft_offset;  // target's first child's dnward_equiv's displacement
-  RealVec ifft_scale;
+  std::vector<RealT> ifft_scale;
   std::vector<size_t> interaction_offset_f;
   std::vector<size_t> interaction_count_offset;
 };
