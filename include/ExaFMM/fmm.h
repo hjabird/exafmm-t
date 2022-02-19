@@ -22,8 +22,8 @@
 
 #include "exafmm.h"
 #include "geometry.h"
-#include "timer.h"
 #include "p2p_methods.h"
+#include "timer.h"
 
 namespace ExaFMM {
 
@@ -78,7 +78,8 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   Fmm() = delete;
 
-  Fmm(int p_, int ncrit_, fmm_kernel_funcs_arg_t kernelArguments = fmm_kernel_funcs_arg_t{},
+  Fmm(int p_, int ncrit_,
+      fmm_kernel_funcs_arg_t kernelArguments = fmm_kernel_funcs_arg_t{},
       std::string filename_ = std::string("myPrecomputationMatrix.dat"))
       : p2p_methods<FmmKernel>{kernelArguments},
         p{p_},
@@ -632,11 +633,12 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   void hadamard_product(std::vector<size_t>& interaction_count_offset,
                         std::vector<size_t>& interaction_offset_f,
-                        AlignedVec& fft_in, AlignedVec& fft_out,
-                        std::vector<AlignedVec>& matrix_M2L) {
+                        std::vector<real_t>& fft_in,
+                        std::vector<real_t>& fft_out,
+                        std::vector<std::vector<real_t>>& matrix_M2L) {
     size_t fft_size = 2 * NCHILD * this->nfreq;
-    AlignedVec zero_vec0(fft_size, 0.);
-    AlignedVec zero_vec1(fft_size, 0.);
+    std::vector<real_t> zero_vec0(fft_size, 0.);
+    std::vector<real_t> zero_vec1(fft_size, 0.);
 
     size_t npos = matrix_M2L.size();
     size_t nblk_inter =
@@ -727,7 +729,8 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<potential_t> all_up_equiv, all_dn_equiv;
     all_up_equiv.resize(nnodes * nsurf_);
     all_dn_equiv.resize(nnodes * nsurf_);
-    std::vector<AlignedVec> matrix_M2L(npos, AlignedVec(fft_size * NCHILD, 0));
+    std::vector<std::vector<real_t>> matrix_M2L(
+        npos, std::vector<real_t>(fft_size * NCHILD, 0));
 
     // setup ifstream of M2L precomputation matrix
     std::ifstream ifile(this->filename, std::ifstream::binary);
@@ -752,7 +755,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       for (size_t i{0}; i < npos; ++i) {
         ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), msize);
       }
-      AlignedVec fft_in, fft_out;
+      std::vector<real_t> fft_in, fft_out;
       fft_in.resize(m2ldata[l].fft_offset.size() * fft_size);
       fft_out.resize(m2ldata[l].ifft_offset.size() * fft_size);
       fft_up_equiv(m2ldata[l].fft_offset, all_up_equiv, fft_in);
@@ -815,10 +818,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     int nconv_ = this->nconv;
     int nfreq_ = this->nfreq;
     int fft_size = 2 * nfreq_ * NCHILD * NCHILD;
-    std::vector<RealVec> matrix_M2L_Helper(REL_COORD[M2L_Helper_Type].size(),
-                                           RealVec(2 * nfreq_));
-    std::vector<AlignedVec> matrix_M2L(REL_COORD[M2L_Type].size(),
-                                       AlignedVec(fft_size));
+    std::vector<std::vector<real_t>> matrix_M2L_Helper(
+        REL_COORD[M2L_Helper_Type].size(), std::vector<real_t>(2 * nfreq_));
+    std::vector<std::vector<real_t>> matrix_M2L(REL_COORD[M2L_Type].size(),
+                                                std::vector<real_t>(fft_size));
     // create fft plan
     RealVec fftw_in(nconv_);
     RealVec fftw_out(2 * nfreq_);
@@ -826,14 +829,14 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     fft_plan plan;
     if constexpr (is_complex<potential_t>::value) {
-        plan = fft_plan_dft(3, dim, reinterpret_cast<fft_complex*>(fftw_in.data()),
-            reinterpret_cast<fft_complex*>(fftw_out.data()),
-            FFTW_FORWARD, FFTW_ESTIMATE);
-    }
-    else {
-        plan = fft_plan_dft_r2c(
-            3, dim, fftw_in.data(), reinterpret_cast<fft_complex*>(fftw_out.data()),
-            FFTW_ESTIMATE);
+      plan =
+          fft_plan_dft(3, dim, reinterpret_cast<fft_complex*>(fftw_in.data()),
+                       reinterpret_cast<fft_complex*>(fftw_out.data()),
+                       FFTW_FORWARD, FFTW_ESTIMATE);
+    } else {
+      plan = fft_plan_dft_r2c(3, dim, fftw_in.data(),
+                              reinterpret_cast<fft_complex*>(fftw_out.data()),
+                              FFTW_ESTIMATE);
     }
     coord_t targetCoord = coord_t::Zero();
     for (int l = 1; l < this->depth + 1; ++l) {
@@ -853,14 +856,13 @@ class Fmm : public p2p_methods<FmmKernel> {
         auto convValue =
             this->kernel_matrix<dynamic>(convolutionCoords, targetCoord);
         if constexpr (is_complex<potential_t>::value) {
-            fft_execute_dft(
-                plan, reinterpret_cast<fft_complex*>(convValue.data()),
-                reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
-        }
-        else {
-            fft_execute_dft_r2c(
-                 plan, convValue.data(),
-                 reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
+          fft_execute_dft(
+              plan, reinterpret_cast<fft_complex*>(convValue.data()),
+              reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
+        } else {
+          fft_execute_dft_r2c(
+              plan, convValue.data(),
+              reinterpret_cast<fft_complex*>(matrix_M2L_Helper[i].data()));
         }
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
@@ -889,9 +891,9 @@ class Fmm : public p2p_methods<FmmKernel> {
     fft_destroy_plan(plan);
   }
 
-  void fft_up_equiv(std::vector<size_t>& fft_offset, 
+  void fft_up_equiv(std::vector<size_t>& fft_offset,
                     std::vector<potential_t>& all_up_equiv,
-                    AlignedVec& fft_in) {
+                    std::vector<real_t>& fft_in) {
     int& nsurf_ = this->nsurf;
     int& nconv_ = this->nconv;
     int& nfreq_ = this->nfreq;
@@ -900,19 +902,18 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     size_t fft_size = 2 * NCHILD * nfreq_;
     ComplexVec fftw_in(nconv_ * NCHILD);
-    AlignedVec fftw_out(fft_size);
+    std::vector<real_t> fftw_out(fft_size);
     int dim[3] = {n1, n1, n1};
     fft_plan plan;
     if constexpr (is_complex<potential_t>::value) {
-        plan = fft_plan_many_dft(
-            3, dim, NCHILD, reinterpret_cast<fft_complex*>(&fftw_in[0]), nullptr, 1,
-            nconv_, (fft_complex*)(&fftw_out[0]), nullptr, 1, nfreq_, FFTW_FORWARD,
-            FFTW_ESTIMATE);
-    }
-    else {
-        plan = fft_plan_many_dft_r2c(
-            3, dim, NCHILD, (real_t*)&fftw_in[0], nullptr, 1, nconv_,
-            (fft_complex*)(&fftw_out[0]), nullptr, 1, nfreq_, FFTW_ESTIMATE);
+      plan = fft_plan_many_dft(3, dim, NCHILD,
+                               reinterpret_cast<fft_complex*>(&fftw_in[0]),
+                               nullptr, 1, nconv_, (fft_complex*)(&fftw_out[0]),
+                               nullptr, 1, nfreq_, FFTW_FORWARD, FFTW_ESTIMATE);
+    } else {
+      plan = fft_plan_many_dft_r2c(
+          3, dim, NCHILD, (real_t*)&fftw_in[0], nullptr, 1, nconv_,
+          (fft_complex*)(&fftw_out[0]), nullptr, 1, nfreq_, FFTW_ESTIMATE);
     }
 
 #pragma omp parallel for
@@ -935,11 +936,10 @@ class Fmm : public p2p_methods<FmmKernel> {
           equiv_t[idx + j * nconv_] = up_equiv[j * nsurf_ + k];
       }
       if constexpr (is_complex<potential_t>::value) {
-          fft_execute_dft(plan, reinterpret_cast<fft_complex*>(&equiv_t[0]),
-              (fft_complex*)&buffer[0]);
-      }
-      else {
-          fft_execute_dft_r2c(plan, &equiv_t[0], (fft_complex*)&buffer[0]);
+        fft_execute_dft(plan, reinterpret_cast<fft_complex*>(&equiv_t[0]),
+                        (fft_complex*)&buffer[0]);
+      } else {
+        fft_execute_dft_r2c(plan, &equiv_t[0], (fft_complex*)&buffer[0]);
       }
       for (int k = 0; k < nfreq_; k++) {
         for (int j = 0; j < NCHILD; j++) {
@@ -953,7 +953,8 @@ class Fmm : public p2p_methods<FmmKernel> {
     fft_destroy_plan(plan);
   }
 
-  void ifft_dn_check(std::vector<size_t>& ifft_offset, AlignedVec& fft_out,
+  void ifft_dn_check(std::vector<size_t>& ifft_offset,
+                     std::vector<real_t>& fft_out,
                      std::vector<potential_t>& all_dn_equiv) {
     int& nsurf_ = this->nsurf;
     int& nconv_ = this->nconv;
@@ -962,21 +963,20 @@ class Fmm : public p2p_methods<FmmKernel> {
     auto map = generate_surf2conv_dn<potential_t>(p);
 
     size_t fft_size = 2 * NCHILD * nfreq_;
-    AlignedVec fftw_in(fft_size);
+    std::vector<real_t> fftw_in(fft_size);
     std::vector<potential_t> fftw_out(nconv_ * NCHILD);
     int dim[3] = {n1, n1, n1};
 
     fft_plan plan;
     if constexpr (is_complex<potential_t>::value) {
-        plan = fft_plan_many_dft(
-            3, dim, NCHILD, (fft_complex*)(&fftw_in[0]), nullptr, 1, nfreq_,
-            reinterpret_cast<fft_complex*>(&fftw_out[0]), nullptr, 1, nconv_,
-            FFTW_BACKWARD, FFTW_ESTIMATE);
-    }
-    else {
-        plan = fft_plan_many_dft_c2r(
-            3, dim, NCHILD, (fft_complex*)(&fftw_in[0]), nullptr, 1, nfreq_,
-            (real_t*)(&fftw_out[0]), nullptr, 1, nconv_, FFTW_ESTIMATE);
+      plan = fft_plan_many_dft(
+          3, dim, NCHILD, (fft_complex*)(&fftw_in[0]), nullptr, 1, nfreq_,
+          reinterpret_cast<fft_complex*>(&fftw_out[0]), nullptr, 1, nconv_,
+          FFTW_BACKWARD, FFTW_ESTIMATE);
+    } else {
+      plan = fft_plan_many_dft_c2r(3, dim, NCHILD, (fft_complex*)(&fftw_in[0]),
+                                   nullptr, 1, nfreq_, (real_t*)(&fftw_out[0]),
+                                   nullptr, 1, nconv_, FFTW_ESTIMATE);
     }
 
 #pragma omp parallel for
@@ -994,12 +994,11 @@ class Fmm : public p2p_methods<FmmKernel> {
               dn_check_f[2 * (NCHILD * k + j) + 1];
         }
       if constexpr (is_complex<potential_t>::value) {
-          fft_execute_dft(plan, (fft_complex*)&buffer0[0],
-              reinterpret_cast<fft_complex*>(&buffer1[0]));
-      }
-      else {
-          fft_execute_dft_c2r(plan, (fft_complex*)&buffer0[0],
-                             (real_t*)(&buffer1[0]));
+        fft_execute_dft(plan, (fft_complex*)&buffer0[0],
+                        reinterpret_cast<fft_complex*>(&buffer1[0]));
+      } else {
+        fft_execute_dft_c2r(plan, (fft_complex*)&buffer0[0],
+                            (real_t*)(&buffer1[0]));
       }
       for (int k = 0; k < nsurf_; k++) {
         size_t idx = map[k];

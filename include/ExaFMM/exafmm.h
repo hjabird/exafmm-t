@@ -13,8 +13,8 @@
 #define INCLUDE_EXAFMM_EXAFMM_H_
 
 #include <omp.h>
-#include <cmath>
 
+#include <cmath>
 #include <set>
 
 #include "args.h"
@@ -34,7 +34,6 @@ typedef Eigen::Vector3i ivec3;           //!< Vector of 3 int types
 
 typedef std::vector<real_t> RealVec;        //!< Vector of real_t types
 typedef std::vector<complex_t> ComplexVec;  //!< Vector of complex_t types
-typedef std::vector<real_t> AlignedVec;     //!< Aligned vector of real_t types
 
 //! Interaction types that need to be pre-computed.
 typedef enum {
