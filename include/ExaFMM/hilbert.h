@@ -209,7 +209,7 @@ ivec3 get3DIndex(typename potential_traits<T>::coord_t X, int level,
   typename potential_traits<T>::real_t dx = 2 * r0 / (1 << level);
   ivec3 iX;
   for (int d = 0; d < 3; d++) {
-    iX[d] = std::floor((X[d] - Xmin[d]) / dx);
+    iX[d] = static_cast<int>(std::floor((X[d] - Xmin[d]) / dx));
   }
   return iX;
 }
