@@ -828,16 +828,15 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<real_t> fftw_out(2 * nfreq_);
     int dim[3] = {n1, n1, n1};
 
-    fft<potential_t>::plan_t plan;
+    using fft_t = fft<potential_t, fft_dir::forwards>;
+    fft_t::plan_t plan;
     if constexpr (is_complex<potential_t>::value) {
       plan =
-          fft<potential_t>::plan_dft(3, dim, reinterpret_cast<fft<potential_t>::complex_t*>(fftw_in.data()),
-                       reinterpret_cast<fft<potential_t>::complex_t*>(fftw_out.data()),
-                       FFTW_FORWARD, FFTW_ESTIMATE);
+          fft_t::plan_one(3, dim, reinterpret_cast<fft_t::complex_t*>(fftw_in.data()),
+                       reinterpret_cast<fft_t::complex_t*>(fftw_out.data()));
     } else {
-      plan = fft<potential_t>::plan_dft_r2c(3, dim, fftw_in.data(),
-                              reinterpret_cast<fft<potential_t>::complex_t*>(fftw_out.data()),
-                              FFTW_ESTIMATE);
+      plan = fft_t::plan_one(3, dim, fftw_in.data(),
+                              reinterpret_cast<fft_t::complex_t*>(fftw_out.data()));
     }
     coord_t targetCoord = coord_t::Zero();
     for (int l = 1; l < this->depth + 1; ++l) {
@@ -857,13 +856,13 @@ class Fmm : public p2p_methods<FmmKernel> {
         auto convValue =
             this->kernel_matrix<dynamic>(convolutionCoords, targetCoord);
         if constexpr (is_complex<potential_t>::value) {
-            fft<potential_t>::execute_dft(
-              plan, reinterpret_cast<fft<potential_t>::complex_t*>(convValue.data()),
-              reinterpret_cast<fft<potential_t>::complex_t*>(matrix_M2L_Helper[i].data()));
+            fft_t::execute(
+              plan, reinterpret_cast<fft_t::complex_t*>(convValue.data()),
+              reinterpret_cast<fft_t::complex_t*>(matrix_M2L_Helper[i].data()));
         } else {
-            fft<potential_t>::execute_dft_r2c(
+            fft_t::execute(
               plan, convValue.data(),
-              reinterpret_cast<fft<potential_t>::complex_t*>(matrix_M2L_Helper[i].data()));
+              reinterpret_cast<fft_t::complex_t*>(matrix_M2L_Helper[i].data()));
         }
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
@@ -889,7 +888,7 @@ class Fmm : public p2p_methods<FmmKernel> {
                    fft_size * sizeof(real_t));
       }
     }
-    fft<potential_t>::destroy_plan(plan);
+    fft_t::destroy_plan(plan);
   }
 
   void fft_up_equiv(std::vector<size_t>& fft_offset,
@@ -902,23 +901,17 @@ class Fmm : public p2p_methods<FmmKernel> {
     auto map = generate_surf2conv_up<potential_t>(p);
 
     size_t fft_size = 2 * NCHILD * nfreq_;
-    std::vector<complex_t> fftw_in(nconv_ * NCHILD);
+    std::vector<potential_t> fftw_in(nconv_ * NCHILD);
     std::vector<real_t> fftw_out(fft_size);
     int dim[3] = {n1, n1, n1};
-    fft<potential_t>::plan_t plan;
-    if constexpr (is_complex<potential_t>::value) {
-      plan = fft<potential_t>::plan_many_dfts(3, dim, NCHILD,
-          reinterpret_cast<fft<potential_t>::complex_t*>(&fftw_in[0]),
-          nullptr, 1, nconv_, 
-          reinterpret_cast<fft<potential_t>::complex_t*>(&fftw_out[0]),
-          nullptr, 1, nfreq_, FFTW_FORWARD, FFTW_ESTIMATE);
-    } else {
-      plan = fft<potential_t>::plan_many_dfts_r2c(
-          3, dim, NCHILD, reinterpret_cast<real_t*>(&fftw_in[0]), 
-          nullptr, 1, nconv_,
-          reinterpret_cast<fft<potential_t>::complex_t*>(&fftw_out[0]), 
-          nullptr, 1, nfreq_, FFTW_ESTIMATE);
-    }
+    using fft_t = fft<potential_t, fft_dir::forwards>;
+    fft_t::plan_t plan;
+    plan = fft_t::plan_many(3, dim, NCHILD,
+        &fftw_in[0],
+        nullptr, 1, nconv_, 
+        reinterpret_cast<fft_t::complex_t*>(&fftw_out[0]),
+        nullptr, 1, nfreq_);
+    
 
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size());
@@ -939,14 +932,8 @@ class Fmm : public p2p_methods<FmmKernel> {
         for (int j = 0; j < NCHILD; j++)
           equiv_t[idx + j * nconv_] = up_equiv[j * nsurf_ + k];
       }
-      if constexpr (is_complex<potential_t>::value) {
-        fft<potential_t>::execute_dft(plan, 
-            reinterpret_cast<fft<potential_t>::complex_t*>(&equiv_t[0]),
-            reinterpret_cast<fft<potential_t>::complex_t*>(&buffer[0]));
-      } else {
-        fft<potential_t>::execute_dft_r2c(plan, &equiv_t[0],
-            reinterpret_cast<fft<potential_t>::complex_t*>(&buffer[0]));
-      }
+      fft_t::execute(plan, &equiv_t[0],
+        reinterpret_cast<fft_t::complex_t*>(&buffer[0]));
       for (int k = 0; k < nfreq_; k++) {
         for (int j = 0; j < NCHILD; j++) {
           up_equiv_f[2 * (NCHILD * k + j) + 0] =
@@ -956,7 +943,7 @@ class Fmm : public p2p_methods<FmmKernel> {
         }
       }
     }
-    fft<potential_t>::destroy_plan(plan);
+    fft_t::destroy_plan(plan);
   }
 
   void ifft_dn_check(std::vector<size_t>& ifft_offset,
@@ -973,20 +960,13 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<potential_t> fftw_out(nconv_ * NCHILD);
     int dim[3] = {n1, n1, n1};
 
-    fft<potential_t>::plan_t plan;
-    if constexpr (is_complex<potential_t>::value) {
-      plan = fft<potential_t>::plan_many_dfts(
-          3, dim, NCHILD, 
-          reinterpret_cast<fft<potential_t>::complex_t*>(&fftw_in[0]), 
-          nullptr, 1, nfreq_,
-          &fftw_out[0], nullptr, 1, nconv_,
-          FFTW_BACKWARD, FFTW_ESTIMATE);
-    } else {
-      plan = fft<potential_t>::plan_many_dfts_c2r(3, dim, NCHILD, 
-          reinterpret_cast<fft<potential_t>::complex_t*>(&fftw_in[0]),
-          nullptr, 1, nfreq_, &fftw_out[0],
-          nullptr, 1, nconv_, FFTW_ESTIMATE);
-    }
+    using fft_t = fft<potential_t, fft_dir::backwards>;
+    fft_t::plan_t plan;
+    plan = fft_t::plan_many(
+      3, dim, NCHILD, 
+      reinterpret_cast<fft_t::complex_t*>(&fftw_in[0]),
+      nullptr, 1, nfreq_,
+      &fftw_out[0], nullptr, 1, nconv_);
 
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(ifft_offset.size());
@@ -995,29 +975,24 @@ class Fmm : public p2p_methods<FmmKernel> {
       std::vector<potential_t> buffer1(NCHILD * nconv_, 0);
       real_t* dn_check_f = &fft_out[fft_size * node_idx];
       potential_t* dn_equiv = &all_dn_equiv[ifft_offset[node_idx]];
-      for (int k = 0; k < nfreq_; k++)
+      for (int k = 0; k < nfreq_; k++){
         for (int j = 0; j < NCHILD; j++) {
           buffer0[2 * (nfreq_ * j + k) + 0] =
               dn_check_f[2 * (NCHILD * k + j) + 0];
           buffer0[2 * (nfreq_ * j + k) + 1] =
               dn_check_f[2 * (NCHILD * k + j) + 1];
         }
-      if constexpr (is_complex<potential_t>::value) {
-          fft<potential_t>::execute_dft(plan, 
-              reinterpret_cast<fft<potential_t>::complex_t*>(&buffer0[0]),
-              reinterpret_cast<fft<potential_t>::complex_t*>(&buffer1[0]));
-      } else {
-          fft<potential_t>::execute_dft_c2r(plan, 
-              reinterpret_cast<fft<potential_t>::complex_t*>(&buffer0[0]),
-              reinterpret_cast<real_t*>(&buffer1[0]));
       }
+      fft_t::execute(plan,
+          reinterpret_cast<fft_t::complex_t*>(&buffer0[0]),
+          &buffer1[0]);
       for (int k = 0; k < nsurf_; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
           dn_equiv[nsurf_ * j + k] += buffer1[idx + j * nconv_];
       }
     }
-    fft<potential_t>::destroy_plan(plan);
+  fft_t::destroy_plan(plan);
   }
 };
 
