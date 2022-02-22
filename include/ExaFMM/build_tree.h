@@ -72,15 +72,15 @@ class adaptive_tree {
     bodies_t sources_buffer = sources;
     bodies_t targets_buffer = targets;
     m_nodes = nodevec_t(1);
-    m_nodes[0].set_geometry(fmm.x0, fmm.r0);
-    m_nodes.reserve((sources.size() + targets.size()) * (32 / fmm.ncrit + 1));
+    m_nodes[0].set_geometry(fmm.m_x0, fmm.m_r0);
+    m_nodes.reserve((sources.size() + targets.size()) * (32 / fmm.m_numCrit + 1));
     build_tree(&sources[0], &sources_buffer[0], 0, sources.size(), &targets[0],
                &targets_buffer[0], 0, targets.size(), &m_nodes[0], fmm);
     int depth = -1;
     for (const auto& leaf : m_leafs) {
       depth = std::max(leaf->level(), depth);
     }
-    fmm.depth = depth;
+    fmm.m_depth = depth;
   }
 
   nodevec_t& nodes() noexcept { return m_nodes; }
@@ -99,12 +99,12 @@ class adaptive_tree {
     node->set_index(node - &m_nodes[0]);  // current node's index in nodes
     const size_t numSources = sourcesEnd - sourcesBegin;
     const size_t numTargets = targetsEnd - targetsBegin;
-    const bool isLeaf{numSources <= fmm.ncrit && numTargets <= fmm.ncrit};
+    const bool isLeaf{numSources <= fmm.m_numCrit && numTargets <= fmm.m_numCrit };
     node->set_num_sources_and_targets(static_cast<int>(numSources), 
         static_cast<int>(numTargets), isLeaf);
-    node->set_num_surfs(fmm.nsurf);
+    node->set_num_surfs(fmm.m_numSurf);
     const ivec3 iX =
-        get3DIndex<potential_t>(node->centre(), node->level(), fmm.x0, fmm.r0);
+        get3DIndex<potential_t>(node->centre(), node->level(), fmm.m_x0, fmm.m_r0);
     node->set_key(getKey(iX, node->level()));
 
     if (isLeaf) {

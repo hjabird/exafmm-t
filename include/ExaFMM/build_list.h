@@ -160,7 +160,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
                   P2P_set.insert(res);
                 }
               } else {
-                if (curr->is_leaf() && curr->num_targets() <= fmm.nsurf) {
+                if (curr->is_leaf() && curr->num_targets() <= fmm.m_numSurf) {
                   P2P_set.insert(res);
                 } else {
                   P2L_set.insert(res);
@@ -176,7 +176,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
                     node_t* temp = buffer.front();
                     buffer.pop();
                     if (!is_adjacent(temp->key(), curr->key())) {
-                      if (temp->is_leaf() && temp->num_sources() <= fmm.nsurf) {
+                      if (temp->is_leaf() && temp->num_sources() <= fmm.m_numSurf) {
                         P2P_set.insert(temp);
                       } else {
                         M2P_set.insert(temp);

@@ -35,16 +35,16 @@ int main(int argc, char** argv) {
 
   start("Total");
   complex_t wavek(5, 10);
-  HelmholtzFmm fmm(args.P, args.ncrit, {wavek});
+  HelmholtzFmm fmm(args.P, args.numCrit, {wavek});
 #if NON_ADAPTIVE
-  fmm.depth = args.maxlevel;
+  fmm.m_depth = args.maxlevel;
 #endif
 
   start("Build Tree");
   auto [boxCentre, boxHalfSide] =
       get_bounds<HelmholtzFmm::potential_t>(sources, targets);
-  fmm.x0 = boxCentre;
-  fmm.r0 = boxHalfSide;
+  fmm.m_x0 = boxCentre;
+  fmm.m_r0 = boxHalfSide;
   adaptive_tree tree(sources, targets, fmm);
   stop("Build Tree");
 
@@ -72,13 +72,13 @@ int main(int argc, char** argv) {
   print("Gradient Error L2", err[1]);
 
   print_divider("Tree");
-  print("Root Center x", fmm.x0[0]);
-  print("Root Center y", fmm.x0[1]);
-  print("Root Center z", fmm.x0[2]);
-  print("Root Radius R", fmm.r0);
-  print("Tree Depth", fmm.depth);
+  print("Root Center x", fmm.m_x0[0]);
+  print("Root Center y", fmm.m_x0[1]);
+  print("Root Center z", fmm.m_x0[2]);
+  print("Root Radius R", fmm.m_r0);
+  print("Tree Depth", fmm.m_depth);
   print("Leaf Nodes", tree.leaves().size());
-  print("Helmholtz kD", 2 * fmm.r0 * fmm.wavek);
+  print("Helmholtz kD", 2 * fmm.m_r0 * fmm.wavek);
 
   return 0;
 }

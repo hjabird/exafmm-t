@@ -63,34 +63,33 @@ class Fmm : public p2p_methods<FmmKernel> {
   using nodevec_t = std::vector<node_t>;
   using nodeptrvec_t = std::vector<node_t*>;
 
-  int p;       //!< Order of expansion
-  int nsurf;   //!< Number of points on equivalent / check surface
-  int nconv;   //!< Number of points on convolution grid
-  int nfreq;   //!< Number of coefficients in DFT (depending on whether T is
+  int m_p;       //!< Order of expansion
+  int m_numSurf;   //!< Number of points on equivalent / check surface
+  int m_numConvPoints;   //!< Number of points on convolution grid
+  int m_numFreq;   //!< Number of coefficients in DFT (depending on whether T is
                //!< real_t)
-  int ncrit;   //!< Max number of bodies per leaf
-  int depth;   //!< Depth of the tree
-  real_t r0;   //!< Half of the side length of the bounding box
-  coord_t x0;  //!< Coordinates of the center of root box
-  bool is_precomputed;   //!< Whether the matrix file is found
-  bool is_real;          //!< Whether template parameter T is real_t
-  std::string filename;  //!< File name of the precomputation matrices
+  int m_numCrit;   //!< Max number of bodies per leaf
+  int m_depth;   //!< Depth of the tree
+  real_t m_r0;   //!< Half of the side length of the bounding box
+  coord_t m_x0;  //!< Coordinates of the center of root box
+  bool m_isPrecomputed;   //!< Whether the matrix file is found
+  std::string m_fileName;  //!< File name of the precomputation matrices
 
   Fmm() = delete;
 
-  Fmm(int p_, int ncrit_,
+  Fmm(int p, int nCrit,
       fmm_kernel_funcs_arg_t kernelArguments = fmm_kernel_funcs_arg_t{},
-      std::string filename_ = std::string("myPrecomputationMatrix.dat"))
+      std::string fileName = std::string("myPrecomputationMatrix.dat"))
       : p2p_methods<FmmKernel>{kernelArguments},
-        p{p_},
-        ncrit{ncrit_},
-        filename{filename_},
-        nsurf{6 * (p_ - 1) * (p_ - 1) + 2},
-        nconv{8 * p_ * p_ * p_},
-        is_real(!potential_traits<potential_t>::isComplexPotential),
-        nfreq{0},
-        is_precomputed{false} {
-    nfreq = is_real ? 4 * p_ * p_ * (p_ + 1) : nconv;
+        m_p{p},
+        m_numCrit{nCrit},
+        m_fileName{fileName},
+        m_numSurf{6 * (p - 1) * (p - 1) + 2},
+        m_numConvPoints{8 * p * p * p},
+        m_numFreq{0},
+        m_isPrecomputed{false} {
+        m_numFreq = potential_traits<potential_t>::isComplexPotential ? 
+            m_numConvPoints : 4 * p * p * (p + 1);
   }
 
   ~Fmm() = default;
@@ -104,7 +103,7 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_M2M;
   std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_L2L;
 
-  std::vector<M2LData<real_t>> m2ldata;
+  std::vector<M2LData<real_t>> m_m2lData;
 
  public:
   /** Compute the kernel matrix of a given kernel.
@@ -164,11 +163,11 @@ class Fmm : public p2p_methods<FmmKernel> {
     nodeptrvec_t& targets = leafs;
     coord_t c = coord_t::Zero(3);
     std::vector<coord_matrix_t<>> upEquivSurf;
-    upEquivSurf.resize(depth + 1);
-    for (int level = 0; level <= depth; level++) {
-      upEquivSurf[level].resize(nsurf, 3);
+    upEquivSurf.resize(m_depth + 1);
+    for (int level = 0; level <= m_depth; level++) {
+      upEquivSurf[level].resize(m_numSurf, 3);
       upEquivSurf[level] =
-          box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
+          box_surface_coordinates<potential_t>(m_p, m_r0, level, c, 1.05);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
@@ -191,13 +190,13 @@ class Fmm : public p2p_methods<FmmKernel> {
   //! P2L operator.
   void P2L(nodevec_t& nodes) {
     nodevec_t& targets = nodes;
-    coord_t c = coord_t::Zero(3);
     std::vector<coord_matrix_t<>> dn_check_surf;
-    dn_check_surf.resize(depth + 1);
-    for (int level = 0; level <= depth; level++) {
-      dn_check_surf[level].resize(nsurf, 3);
+    dn_check_surf.resize(m_depth + 1);
+    for (int level = 0; level <= m_depth; level++) {
+      dn_check_surf[level].resize(m_numSurf, 3);
       dn_check_surf[level] =
-          box_surface_coordinates<potential_t>(p, r0, level, c, 1.05);
+          box_surface_coordinates<potential_t>(
+              m_p, m_r0, level, coord_t::Zero(3), 1.05);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
@@ -207,7 +206,7 @@ class Fmm : public p2p_methods<FmmKernel> {
         node_t* source = sources[j];
         int level = target->level();
         // target node's check coord = relative check coord + node's center
-        coord_matrix_t<> targetCheckCoords(nsurf, 3);
+        coord_matrix_t<> targetCheckCoords(m_numSurf, 3);
         targetCheckCoords = dn_check_surf[level];
         targetCheckCoords.rowwise() += target->centre();
         target->down_equiv() =
@@ -273,9 +272,9 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<real_t> verify(nodeptrvec_t& leafs, bool sample = false) {
     nodevec_t targets;  // vector of target nodes
     if (sample) {
-      int nsamples = 10;
-      size_t stride = leafs.size() / nsamples;
-      for (size_t i = 0; i < nsamples; i++) {
+      int nSamples = 10;
+      size_t stride = leafs.size() / nSamples;
+      for (size_t i = 0; i < nSamples; i++) {
         targets.push_back(*(leafs[i * stride]));
       }
     } else {  // compute all values directly without sampling
@@ -321,44 +320,43 @@ class Fmm : public p2p_methods<FmmKernel> {
   /* precomputation */
   //! Setup the sizes of precomputation matrices
   void initialize_matrix() {
-    int& nsurf_ = this->nsurf;
-    int& depth_ = this->depth;
-    matrix_UC2E_V.resize(depth_ + 1, potential_matrix_t<>(nsurf_, nsurf_));
-    matrix_UC2E_U.resize(depth_ + 1, potential_matrix_t<>(nsurf_, nsurf_));
-    matrix_DC2E_V.resize(depth_ + 1, potential_matrix_t<>(nsurf_, nsurf_));
-    matrix_DC2E_U.resize(depth_ + 1, potential_matrix_t<>(nsurf_, nsurf_));
-    matrix_M2M.resize(depth_ + 1);
-    matrix_L2L.resize(depth_ + 1);
-    for (int level = 0; level <= depth_; ++level) {
+    const int nSurf = m_numSurf;
+    int depth = m_depth;
+    matrix_UC2E_V.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    matrix_UC2E_U.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    matrix_DC2E_V.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    matrix_DC2E_U.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    matrix_M2M.resize(depth + 1);
+    matrix_L2L.resize(depth + 1);
+    for (int level = 0; level <= depth; ++level) {
       matrix_M2M[level].resize(REL_COORD[M2M_Type].size(),
-                               potential_matrix_t<>(nsurf_, nsurf_));
+                               potential_matrix_t<>(nSurf, nSurf));
       matrix_L2L[level].resize(REL_COORD[L2L_Type].size(),
-                               potential_matrix_t<>(nsurf_, nsurf_));
+                               potential_matrix_t<>(nSurf, nSurf));
     }
   }
 
   //! Precompute M2M and L2L
   void precompute_M2M() {
-    int& nsurf_ = this->nsurf;
-    coord_t parent_coord{0, 0, 0};
-    for (int level = 0; level <= this->depth; level++) {
+    coord_t parentCoord{0, 0, 0};
+    for (int level = 0; level <= m_depth; level++) {
       auto parent_up_check_surf = box_surface_coordinates<potential_t>(
-          this->p, this->r0, level, parent_coord, 2.95);
-      real_t s = this->r0 * std::pow(0.5, level + 1);
+          m_p, m_r0, level, parentCoord, 2.95);
+      real_t s = m_r0 * std::pow(0.5, level + 1);
       int npos = static_cast<int>(
           REL_COORD[M2M_Type].size());  // number of relative positions
 #pragma omp parallel for
       for (int i = 0; i < npos; i++) {
         // compute kernel matrix
         ivec3& coord = REL_COORD[M2M_Type][i];
-        coord_t child_coord{parent_coord};
+        coord_t childCoord{ parentCoord };
         for (int d{0}; d < 3; ++d) {
-          child_coord(d) += coord[d] * s;
+            childCoord(d) += coord[d] * s;
         }
         auto child_up_equiv_surf = box_surface_coordinates<potential_t>(
-            this->p, this->r0, level + 1, child_coord, 1.05);
+            m_p, m_r0, level + 1, childCoord, 1.05);
         potential_matrix_t<> matrix_pc2ce =
-            this->kernel_matrix(parent_up_check_surf, child_up_equiv_surf);
+            kernel_matrix(parent_up_check_surf, child_up_equiv_surf);
         // M2M
         matrix_M2M[level][i] =
             matrix_UC2E_V[level] * matrix_UC2E_U[level] * matrix_pc2ce;
@@ -371,9 +369,9 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! Save precomputation matrices
   void save_matrix(std::ofstream& file) {
-    file.write(reinterpret_cast<char*>(&this->r0), sizeof(real_t));  // r0
-    size_t size = this->nsurf * this->nsurf;
-    for (int l = 0; l <= this->depth; l++) {
+    file.write(reinterpret_cast<char*>(&m_r0), sizeof(real_t));  // r0
+    size_t size = m_numSurf * m_numSurf;
+    for (int l = 0; l <= m_depth; l++) {
       // UC2E, DC2E
       file.write(reinterpret_cast<char*>(matrix_UC2E_U[l].data()),
                  size * sizeof(potential_t));
@@ -397,24 +395,24 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! Check and load precomputation matrices
   void load_matrix() {
-    int& nsurf_ = this->nsurf;
-    int& depth_ = this->depth;
-    size_t size_M2L = this->nfreq * 2 * NCHILD * NCHILD;
-    size_t file_size =
-        (2 * REL_COORD[M2M_Type].size() + 4) * nsurf_ * nsurf_ * (depth_ + 1) *
+    const int nSurf = m_numSurf;
+    const int depth = m_depth;
+    size_t size_M2L = m_numFreq * 2 * NCHILD * NCHILD;
+    size_t fileSize =
+        (2 * REL_COORD[M2M_Type].size() + 4) * nSurf * nSurf * (depth + 1) *
             sizeof(potential_t) +
-        REL_COORD[M2L_Type].size() * size_M2L * depth_ * sizeof(real_t) +
+        REL_COORD[M2L_Type].size() * size_M2L * depth * sizeof(real_t) +
         1 * sizeof(real_t);  // +1 denotes r0
-    std::ifstream file(this->filename, std::ifstream::binary);
+    std::ifstream file(m_fileName, std::ifstream::binary);
     if (file.good()) {
       file.seekg(0, file.end);
-      if (size_t(file.tellg()) == file_size) {  // if file size is correct
+      if (size_t(file.tellg()) == fileSize) {  // if file size is correct
         file.seekg(0, file.beg);  // move the position back to the beginning
-        real_t r0_;
-        file.read(reinterpret_cast<char*>(&r0_), sizeof(real_t));
-        if (this->r0 == r0_) {  // if radius match
-          size_t size = nsurf_ * nsurf_;
-          for (int l = 0; l <= depth_; l++) {
+        real_t r0;
+        file.read(reinterpret_cast<char*>(&r0), sizeof(real_t));
+        if (m_r0 == r0) {  // if radius match
+          size_t size = nSurf * nSurf;
+          for (int l = 0; l <= depth; l++) {
             // UC2E, DC2E
             file.read(reinterpret_cast<char*>(matrix_UC2E_U[l].data()),
                       size * sizeof(potential_t));
@@ -434,7 +432,7 @@ class Fmm : public p2p_methods<FmmKernel> {
                         size * sizeof(potential_t));
             }
           }
-          this->is_precomputed = true;
+          m_isPrecomputed = true;
         }
       }
     }
@@ -445,11 +443,11 @@ class Fmm : public p2p_methods<FmmKernel> {
   void precompute() {
     initialize_matrix();
     // load_matrix();
-    if (!this->is_precomputed) {
+    if (!m_isPrecomputed) {
       precompute_check2equiv();
       precompute_M2M();
-      std::remove(this->filename.c_str());
-      std::ofstream file(this->filename, std::ios_base::binary);
+      std::remove(m_fileName.c_str());
+      std::ofstream file(m_fileName, std::ios_base::binary);
       save_matrix(file);
       precompute_M2L(file);
       file.close();
@@ -458,27 +456,24 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! P2M operator
   void P2M(nodeptrvec_t& leafs) {
-    int& nsurf_ = this->nsurf;
-    coord_t c{0, 0, 0};
-    std::vector<coord_matrix_t<>> up_check_surf;
-    up_check_surf.resize(this->depth + 1);
-    for (int level = 0; level <= this->depth; level++) {
-      up_check_surf[level].resize(nsurf_, 3);
-      up_check_surf[level] = box_surface_coordinates<potential_t>(
-          this->p, this->r0, level, c, 2.95);
+    std::vector<coord_matrix_t<>> upCheckSurf(
+        m_depth + 1, coord_matrix_t<>(m_numSurf, 3));
+    for (int level = 0; level <= m_depth; level++) {
+        upCheckSurf[level] = box_surface_coordinates<potential_t>(
+          m_p, m_r0, level, {0, 0, 0}, 2.95);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
       node_t* leaf = leafs[i];
       int level = leaf->level();
       // calculate upward check potential induced by sources' charges
-      coord_matrix_t<> check_coord{up_check_surf[level]};
+      coord_matrix_t<> check_coord{ upCheckSurf[level]};
       check_coord.rowwise() += leaf->centre();
       leaf->up_equiv() = this->potential_P2P(
           leaf->source_coords(), leaf->source_strengths(), check_coord);
       Eigen::Matrix<potential_t, Eigen::Dynamic, 1> equiv =
           matrix_UC2E_V[level] * matrix_UC2E_U[level] * leaf->up_equiv();
-      for (int k = 0; k < nsurf_; k++) {
+      for (int k = 0; k < m_numSurf; k++) {
         leaf->up_equiv()[k] = equiv[k];
       }
     }
@@ -486,14 +481,11 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! L2P operator
   void L2P(nodeptrvec_t& leafs) {
-    int& nsurf_ = this->nsurf;
-    coord_t c{0, 0, 0};
-    std::vector<coord_matrix_t<>> dn_equiv_surf;
-    dn_equiv_surf.resize(this->depth + 1);
-    for (int level = 0; level <= this->depth; level++) {
-      dn_equiv_surf[level].resize(nsurf_, 3);
-      dn_equiv_surf[level] = box_surface_coordinates<potential_t>(
-          this->p, this->r0, level, c, 2.95);
+    std::vector<coord_matrix_t<>> downEquivSurf(
+        m_depth + 1, coord_matrix_t<>(m_numSurf, 3));
+    for (int level = 0; level <= m_depth; level++) {
+      downEquivSurf[level] = box_surface_coordinates<potential_t>(
+          m_p, m_r0, level, {0, 0, 0}, 2.95);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
@@ -504,7 +496,7 @@ class Fmm : public p2p_methods<FmmKernel> {
           matrix_DC2E_V[level] * matrix_DC2E_U[level] * leaf->down_equiv();
       leaf->down_equiv() = equiv;
       // equivalent surface charge -> target potential
-      coord_matrix_t<> equiv_coord(dn_equiv_surf[level]);
+      coord_matrix_t<> equiv_coord(downEquivSurf[level]);
       equiv_coord.rowwise() += leaf->centre();
       leaf->target_potentials() += this->potential_P2P(
           equiv_coord, leaf->down_equiv(), leaf->target_coords());
@@ -515,7 +507,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! M2M operator
   void M2M(node_t* node) {
-    const int nsurf_ = this->nsurf;
+    const int nSurf = m_numSurf;
     if (node->is_leaf()) return;
 #pragma omp parallel for schedule(dynamic)
     for (int octant = 0; octant < 8; octant++) {
@@ -535,7 +527,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! L2L operator
   void L2L(node_t* node) {
-    const int nsurf_ = this->nsurf;
+    const int nSurf = m_numSurf;
     if (node->is_leaf()) return;
     for (int octant = 0; octant < 8; octant++) {
       if (node->has_child(octant)) {
@@ -555,25 +547,24 @@ class Fmm : public p2p_methods<FmmKernel> {
   }
 
   void M2L_setup(nodeptrvec_t& nonleafs) {
-    const int nsurf_ = this->nsurf;
-    const int depth_ = this->depth;
-    int npos = static_cast<int>(
+    const int depth = m_depth;
+    int nPos = static_cast<int>(
         REL_COORD[M2L_Type].size());  // number of M2L relative positions
-    m2ldata.resize(depth_);           // initialize m2ldata
+    m_m2lData.resize(depth);           // initialize m2ldata
 
     // construct lists of target nodes for M2L operator at each level
-    std::vector<nodeptrvec_t> targetNodes(depth_);
+    std::vector<nodeptrvec_t> targetNodes(depth);
     for (size_t i = 0; i < nonleafs.size(); i++) {
       targetNodes[nonleafs[i]->level()].push_back(nonleafs[i]);
     }
 
     // prepare for m2ldata for each level
-    for (int l = 0; l < depth_; l++) {
+    for (int l = 0; l < depth; l++) {
       // construct M2L source nodes for current level
       std::set<node_t*> src_nodes_;
       for (size_t i = 0; i < targetNodes[l].size(); i++) {
         nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
-        for (int k = 0; k < npos; k++) {
+        for (int k = 0; k < nPos; k++) {
           if (M2L_list[k]) src_nodes_.insert(M2L_list[k]);
         }
       }
@@ -584,50 +575,52 @@ class Fmm : public p2p_methods<FmmKernel> {
       }
       // prepare the indices of src_nodes & targetNodes in all_up_equiv &
       // all_dn_equiv
-      std::vector<size_t> fft_offset(
+      std::vector<size_t> fftOffset(
           src_nodes.size());  // displacement in all_up_equiv
-      std::vector<size_t> ifft_offset(
+      std::vector<size_t> ifftOffset(
           targetNodes[l].size());  // displacement in all_dn_equiv
       for (size_t i = 0; i < src_nodes.size(); i++) {
-        fft_offset[i] = src_nodes[i]->child(0).index() * nsurf_;
+        fftOffset[i] = src_nodes[i]->child(0).index() * m_numSurf;
       }
       for (size_t i = 0; i < targetNodes[l].size(); i++) {
-        ifft_offset[i] = targetNodes[l][i]->child(0).index() * nsurf_;
+        ifftOffset[i] = targetNodes[l][i]->child(0).index() * m_numSurf;
       }
 
       // calculate interaction_offset_f & interaction_count_offset
-      std::vector<size_t> interaction_offset_f;
-      std::vector<size_t> interaction_count_offset;
+      std::vector<size_t> interactionOffsetF;
+      std::vector<size_t> interactionCountOffset;
       for (size_t i = 0; i < src_nodes.size(); i++) {
         src_nodes[i]->indexM2L() =
             i;  // node_id: node's index in src_nodes list
       }
       size_t nblk_trg = targetNodes[l].size() * sizeof(real_t) / CACHE_SIZE;
-      if (nblk_trg == 0) nblk_trg = 1;
-      size_t interaction_count_offset_ = 0;
-      size_t fft_size = 2 * NCHILD * this->nfreq;
+      if (nblk_trg == 0) { 
+          nblk_trg = 1; 
+      }
+      size_t interactionCountOffsetVar = 0;
+      size_t fftSize = 2 * NCHILD * m_numFreq;
       for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
         size_t blk_start = (targetNodes[l].size() * iblk_trg) / nblk_trg;
         size_t blk_end = (targetNodes[l].size() * (iblk_trg + 1)) / nblk_trg;
-        for (int k = 0; k < npos; k++) {
+        for (int k = 0; k < nPos; k++) {
           for (size_t i = blk_start; i < blk_end; i++) {
             nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
             if (M2L_list[k]) {
-              interaction_offset_f.push_back(
+              interactionOffsetF.push_back(
                   M2L_list[k]->indexM2L() *
-                  fft_size);  // src_node's displacement in fft_in
-              interaction_offset_f.push_back(
-                  i * fft_size);  // trg_node's displacement in fft_out
-              interaction_count_offset_++;
+                  fftSize);  // src_node's displacement in fft_in
+              interactionOffsetF.push_back(
+                  i * fftSize);  // trg_node's displacement in fft_out
+              interactionCountOffsetVar++;
             }
           }
-          interaction_count_offset.push_back(interaction_count_offset_);
+          interactionCountOffset.push_back(interactionCountOffsetVar);
         }
       }
-      m2ldata[l].fft_offset = fft_offset;
-      m2ldata[l].ifft_offset = ifft_offset;
-      m2ldata[l].interaction_offset_f = interaction_offset_f;
-      m2ldata[l].interaction_count_offset = interaction_count_offset;
+      m_m2lData[l].fft_offset = fftOffset;
+      m_m2lData[l].ifft_offset = ifftOffset;
+      m_m2lData[l].interaction_offset_f = interactionOffsetF;
+      m_m2lData[l].interaction_count_offset = interactionCountOffset;
     }
   }
 
@@ -636,22 +629,22 @@ class Fmm : public p2p_methods<FmmKernel> {
                         std::vector<real_t>& fft_in,
                         std::vector<real_t>& fft_out,
                         std::vector<std::vector<real_t>>& matrix_M2L) {
-    size_t fft_size = 2 * NCHILD * this->nfreq;
-    std::vector<real_t> zero_vec0(fft_size, 0.);
-    std::vector<real_t> zero_vec1(fft_size, 0.);
+    size_t fftSize = 2 * NCHILD * m_numFreq;
+    std::vector<real_t> zero_vec0(fftSize, 0.);
+    std::vector<real_t> zero_vec1(fftSize, 0.);
 
-    size_t npos = matrix_M2L.size();
+    size_t nPos = matrix_M2L.size();
     size_t nblk_inter =
         interaction_count_offset.size();  // num of blocks of interactions
-    size_t nblk_trg = nblk_inter / npos;  // num of blocks based on targetNodes
+    size_t nblk_trg = nblk_inter / nPos;  // num of blocks based on targetNodes
     int BLOCK_SIZE = CACHE_SIZE * 2 / sizeof(real_t);
     std::vector<real_t*> IN_(BLOCK_SIZE * nblk_inter);
     std::vector<real_t*> OUT_(BLOCK_SIZE * nblk_inter);
 
     // initialize fft_out with zero
 #pragma omp parallel for
-    for (int i = 0; i < static_cast<int>(fft_out.capacity() / fft_size); ++i) {
-      std::memset(fft_out.data() + i * fft_size, 0, fft_size * sizeof(real_t));
+    for (int i = 0; i < static_cast<int>(fft_out.capacity() / fftSize); ++i) {
+      std::memset(fft_out.data() + i * fftSize, 0, fftSize * sizeof(real_t));
     }
 
 #pragma omp parallel for
@@ -676,9 +669,9 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
       //#pragma omp parallel for
-      for (int k = 0; k < this->nfreq; k++) {
-        for (size_t ipos = 0; ipos < npos; ipos++) {
-          size_t iblk_inter = iblk_trg * npos + ipos;
+      for (int k = 0; k < m_numFreq; k++) {
+        for (size_t ipos = 0; ipos < nPos; ipos++) {
+          size_t iblk_inter = iblk_trg * nPos + ipos;
           size_t interaction_count_offset0 =
               (iblk_inter == 0 ? 0 : interaction_count_offset[iblk_inter - 1]);
           size_t interaction_count_offset1 =
@@ -719,56 +712,55 @@ class Fmm : public p2p_methods<FmmKernel> {
   }
 
   void M2L(nodevec_t& nodes) {
-    const int nsurf_ = this->nsurf;
-    const int nfreq_ = this->nfreq;
-    int fft_size = 2 * NCHILD * nfreq_;
-    size_t nnodes = nodes.size();
-    size_t npos = REL_COORD[M2L_Type].size();  // number of relative positions
+    const int nSurf = m_numSurf;
+    int fftSize = 2 * NCHILD * m_numFreq;
+    size_t nNodes = nodes.size();
+    size_t nPos = REL_COORD[M2L_Type].size();  // number of relative positions
 
     // allocate memory
-    std::vector<potential_t> all_up_equiv, all_dn_equiv;
-    all_up_equiv.resize(nnodes * nsurf_);
-    all_dn_equiv.resize(nnodes * nsurf_);
+    std::vector<potential_t> allUpEquiv, allDnEquiv;
+    allUpEquiv.resize(nNodes * nSurf);
+    allDnEquiv.resize(nNodes * nSurf);
     std::vector<std::vector<real_t>> matrix_M2L(
-        npos, std::vector<real_t>(fft_size * NCHILD, 0));
+        nPos, std::vector<real_t>(fftSize * NCHILD, 0));
 
     // setup ifstream of M2L precomputation matrix
-    std::ifstream ifile(this->filename, std::ifstream::binary);
+    std::ifstream ifile(m_fileName, std::ifstream::binary);
     ifile.seekg(0, ifile.end);
-    size_t fsize = ifile.tellg();  // file size in bytes
-    size_t msize = NCHILD * NCHILD * nfreq_ * 2 *
+    size_t fSize = ifile.tellg();  // file size in bytes
+    size_t mSize = NCHILD * NCHILD * m_numFreq * 2 *
                    sizeof(real_t);  // size in bytes for each M2L matrix
-    ifile.seekg(fsize - this->depth * npos * msize,
+    ifile.seekg(fSize - m_depth * nPos * mSize,
                 ifile.beg);  // go to the start of M2L section
 
     // collect all upward equivalent charges
     //#pragma omp parallel for collapse(2)
-    for (int i = 0; i < nnodes; ++i) {
-      for (int j = 0; j < nsurf_; ++j) {
-        all_up_equiv[i * nsurf_ + j] = nodes[i].up_equiv()[j];
-        all_dn_equiv[i * nsurf_ + j] = nodes[i].down_equiv()[j];
+    for (int i = 0; i < nNodes; ++i) {
+      for (int j = 0; j < nSurf; ++j) {
+          allUpEquiv[i * nSurf + j] = nodes[i].up_equiv()[j];
+          allDnEquiv[i * nSurf + j] = nodes[i].down_equiv()[j];
       }
     }
     // FFT-accelerate M2L
-    for (size_t l{0}; l < this->depth; ++l) {
+    for (size_t l{0}; l < m_depth; ++l) {
       // load M2L matrix for current level
-      for (size_t i{0}; i < npos; ++i) {
-        ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), msize);
+      for (size_t i{0}; i < nPos; ++i) {
+        ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), mSize);
       }
-      std::vector<real_t> fft_in, fft_out;
-      fft_in.resize(m2ldata[l].fft_offset.size() * fft_size);
-      fft_out.resize(m2ldata[l].ifft_offset.size() * fft_size);
-      fft_up_equiv(m2ldata[l].fft_offset, all_up_equiv, fft_in);
-      hadamard_product(m2ldata[l].interaction_count_offset,
-                       m2ldata[l].interaction_offset_f, fft_in, fft_out,
+      std::vector<real_t> fftIn, fftOut;
+      fftIn.resize(m_m2lData[l].fft_offset.size() * fftSize);
+      fftOut.resize(m_m2lData[l].ifft_offset.size() * fftSize);
+      fft_up_equiv(m_m2lData[l].fft_offset, allUpEquiv, fftIn);
+      hadamard_product(m_m2lData[l].interaction_count_offset,
+          m_m2lData[l].interaction_offset_f, fftIn, fftOut,
                        matrix_M2L);
-      ifft_dn_check(m2ldata[l].ifft_offset, fft_out, all_dn_equiv);
+      ifft_dn_check(m_m2lData[l].ifft_offset, fftOut, allDnEquiv);
     }
     // update all downward check potentials
     //#pragma omp parallel for collapse(2)
-    for (int i = 0; i < nnodes; ++i) {
-      for (int j = 0; j < nsurf_; ++j) {
-        nodes[i].down_equiv()[j] = all_dn_equiv[i * nsurf_ + j];
+    for (int i = 0; i < nNodes; ++i) {
+      for (int j = 0; j < nSurf; ++j) {
+        nodes[i].down_equiv()[j] = allDnEquiv[i * nSurf + j];
       }
     }
     ifile.close();  // close ifstream
@@ -781,16 +773,15 @@ class Fmm : public p2p_methods<FmmKernel> {
    **/
   void precompute_check2equiv() {
     coord_t boxCentre = coord_t::Zero(3);
-    int nsurf_ = this->nsurf;
     //#pragma omp parallel for
-    for (int level = 0; level <= this->depth; ++level) {
+    for (int level = 0; level <= m_depth; ++level) {
       // compute kernel matrix
-      auto up_check_surf = box_surface_coordinates<potential_t>(
-          this->p, this->r0, level, boxCentre, 2.95);
-      auto up_equiv_surf = box_surface_coordinates<potential_t>(
-          this->p, this->r0, level, boxCentre, 1.05);
+      auto upCheckSurf = box_surface_coordinates<potential_t>(
+          m_p, m_r0, level, boxCentre, 2.95);
+      auto upEquivSurf = box_surface_coordinates<potential_t>(
+          m_p, m_r0, level, boxCentre, 1.05);
       potential_matrix_t<> matrix_c2e =
-          this->kernel_matrix(up_check_surf, up_equiv_surf);
+          kernel_matrix(upCheckSurf, upEquivSurf);
       Eigen::BDCSVD<potential_matrix_t<>> svd(
           matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
       auto singularDiag = svd.singularValues();
@@ -800,7 +791,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       real_t max_S = std::reduce(
           singularDiag.data(), singularDiag.data() + singularDiag.size(), 0.,
           [](auto a1, auto a2) { return std::max(a1, a2); });
-      for (int i = 0; i < nsurf_; i++) {
+      for (int i = 0; i < m_numSurf; i++) {
         singularDiag(i) = singularDiag(i) > pt::epsilon * max_S * 4
                               ? 1.0 / singularDiag(i)
                               : 0.0;
@@ -815,39 +806,36 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   // ################################################################################
   void precompute_M2L(std::ofstream& file) {
-    int n1 = this->p * 2;
-    int nConv = this->nconv;
-    int nFreq = this->nfreq;
-    int fft_size = nFreq * NCHILD * NCHILD;
+    int fftSize = m_numFreq * NCHILD * NCHILD;
     std::vector<std::vector<complex_t>> matrix_M2L_Helper(
-        REL_COORD[M2L_Helper_Type].size(), std::vector<complex_t>(nFreq));
+        REL_COORD[M2L_Helper_Type].size(), std::vector<complex_t>(m_numFreq));
     std::vector<std::vector<complex_t>> matrix_M2L(REL_COORD[M2L_Type].size(),
-                                                std::vector<complex_t>(fft_size));
+                                                std::vector<complex_t>(fftSize));
     // create fft plan
-    std::vector<potential_t> fftw_in(nConv);
-    std::vector<complex_t> fftw_out(nFreq);
-    int dim[3] = {n1, n1, n1};
+    std::vector<potential_t> fftwIn(m_numConvPoints);
+    std::vector<complex_t> fftwOut(m_numFreq);
+    ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
 
     using fft_t = fft<potential_t, fft_dir::forwards>;
     fft_t::plan_t plan;
-    plan = fft_t::plan_one(3, dim, fftw_in.data(), fftw_out.data());
+    plan = fft_t::plan_one(3, dim.data(), fftwIn.data(), fftwOut.data());
     coord_t targetCoord = coord_t::Zero();
-    for (int l = 1; l < this->depth + 1; ++l) {
+    for (int l = 1; l < m_depth + 1; ++l) {
       // compute M2L kernel matrix, perform DFT
       //#pragma omp parallel for
       for (int i = 0; i < static_cast<int>(REL_COORD[M2L_Helper_Type].size());
            ++i) {
         coord_t boxCentre;
         for (int d = 0; d < 3; d++) {
-          boxCentre[d] = REL_COORD[M2L_Helper_Type][i][d] * this->r0 *
+          boxCentre[d] = REL_COORD[M2L_Helper_Type][i][d] * m_r0 *
                          std::pow(0.5, l - 1);  // relative coords
         }
         coord_matrix_t<dynamic> convolutionCoords =
-            convolution_grid<potential_t>(this->p, this->r0, l,
+            convolution_grid<potential_t>(m_p, m_r0, l,
                                           boxCentre);  // convolution grid
         // potentials on convolution grid
         auto convValue =
-            this->kernel_matrix<dynamic>(convolutionCoords, targetCoord);
+            kernel_matrix<dynamic>(convolutionCoords, targetCoord);
         fft_t::execute(plan, convValue.data(), matrix_M2L_Helper[i].data());
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
@@ -855,12 +843,12 @@ class Fmm : public p2p_methods<FmmKernel> {
       for (int i{0}; i < static_cast<int>(REL_COORD[M2L_Type].size()); ++i) {
         for (int j = 0; j < NCHILD * NCHILD;
              j++) {  // loop over child's relative positions
-          int child_rel_idx = M2L_INDEX_MAP[i][j];
-          if (child_rel_idx != -1) {
-            for (int k = 0; k < nFreq; k++) {  // loop over frequencies
+          int childRelIdx = M2L_INDEX_MAP[i][j];
+          if (childRelIdx != -1) {
+            for (int k = 0; k < m_numFreq; k++) {  // loop over frequencies
               int new_idx = k * (NCHILD * NCHILD) + j;
               matrix_M2L[i][new_idx] =
-                  matrix_M2L_Helper[child_rel_idx][k] / complex_t(nConv);
+                  matrix_M2L_Helper[childRelIdx][k] / complex_t(m_numConvPoints);
             }
           }
         }
@@ -868,7 +856,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       // write to file
       for (auto& vec : matrix_M2L) {
         file.write(reinterpret_cast<char*>(vec.data()),
-                   fft_size * sizeof(complex_t));
+            fftSize * sizeof(complex_t));
       }
     }
     fft_t::destroy_plan(plan);
@@ -877,44 +865,41 @@ class Fmm : public p2p_methods<FmmKernel> {
   void fft_up_equiv(std::vector<size_t>& fft_offset,
                     std::vector<potential_t>& all_up_equiv,
                     std::vector<real_t>& fft_in) {
-    int nSurf = this->nsurf;
-    int nConv = this->nconv;
-    int nFreq = this->nfreq;
-    int n1 = this->p * 2;
-    auto map = generate_surf2conv_up<potential_t>(p);
+    const int nConv = m_numConvPoints;
+    auto map = generate_surf2conv_up<potential_t>(m_p);
 
-    size_t fft_size = NCHILD * nFreq;
-    std::vector<potential_t> fftw_in(nConv * NCHILD);
-    std::vector<complex_t> fftw_out(fft_size);
-    int dim[3] = {n1, n1, n1};
+    size_t fftSize = NCHILD * m_numFreq;
+    std::vector<potential_t> fftwIn(nConv * NCHILD);
+    std::vector<complex_t> fftwOut(fftSize);
+    ivec3 dim = ivec3{m_p, m_p, m_p } * 2;
     using fft_t = fft<potential_t, fft_dir::forwards>;
     fft_t::plan_t plan;
-    plan = fft_t::plan_many(3, dim, NCHILD,
-        fftw_in.data(), nullptr, 1, nConv,
-        fftw_out.data(), nullptr, 1, nFreq);
+    plan = fft_t::plan_many(3, dim.data(), NCHILD,
+        fftwIn.data(), nullptr, 1, nConv,
+        fftwOut.data(), nullptr, 1, m_numFreq);
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size());
          node_idx++) {
-      std::vector<complex_t> buffer(fft_size, 0);
+      std::vector<complex_t> buffer(fftSize, 0);
       std::vector<potential_t> equiv_t(NCHILD * nConv, potential_t(0.));
 
       potential_t* up_equiv =
           &all_up_equiv[fft_offset[node_idx]];  // offset ptr of node's 8
                                                 // child's up_equiv in
-                                                // all_up_equiv, size=8*nsurf_
+                                                // all_up_equiv, size=8*m_numSurf_
       complex_t* up_equiv_f = reinterpret_cast<complex_t*>(
-          &fft_in[fft_size * 2 * node_idx]);  // offset ptr of node_idx in fft_in
+          &fft_in[fftSize * 2 * node_idx]);  // offset ptr of node_idx in fft_in
                                          // vector, size=fftsize
 
-      for (int k = 0; k < nSurf; k++) {
+      for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          equiv_t[idx + j * nConv] = up_equiv[j * nSurf + k];
+          equiv_t[idx + j * nConv] = up_equiv[j * m_numSurf + k];
       }
       fft_t::execute(plan, &equiv_t[0], buffer.data());
-      for (int k = 0; k < nFreq; k++) {
+      for (int k = 0; k < m_numFreq; k++) {
         for (int j = 0; j < NCHILD; j++) {
-          up_equiv_f[NCHILD * k + j] = buffer[nFreq * j + k];
+          up_equiv_f[NCHILD * k + j] = buffer[m_numFreq * j + k];
         }
       }
     }
@@ -924,42 +909,38 @@ class Fmm : public p2p_methods<FmmKernel> {
   void ifft_dn_check(std::vector<size_t>& ifft_offset,
                      std::vector<real_t>& fft_out,
                      std::vector<potential_t>& all_dn_equiv) {
-    int nSurf = this->nsurf;
-    int nConv = this->nconv;
-    int nFreq = this->nfreq;
-    int n1 = this->p * 2;
-    auto map = generate_surf2conv_dn<potential_t>(p);
+    auto map = generate_surf2conv_dn<potential_t>(m_p);
 
-    size_t fft_size = NCHILD * nFreq;
-    std::vector<complex_t> fftw_in(fft_size);
-    std::vector<potential_t> fftw_out(nConv * NCHILD);
-    int dim[3] = {n1, n1, n1};
+    size_t fftSize = NCHILD * m_numFreq;
+    std::vector<complex_t> fftwIn(fftSize);
+    std::vector<potential_t> fftwOut(m_numConvPoints * NCHILD);
+    ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
 
     using fft_t = fft<potential_t, fft_dir::backwards>;
     fft_t::plan_t plan;
     plan = fft_t::plan_many(
-      3, dim, NCHILD, 
-      fftw_in.data(), nullptr, 1, nFreq,
-      fftw_out.data(), nullptr, 1, nConv);
+      3, dim.data(), NCHILD, 
+      fftwIn.data(), nullptr, 1, m_numFreq,
+      fftwOut.data(), nullptr, 1, m_numConvPoints);
 
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(ifft_offset.size());
          node_idx++) {
-      std::vector<complex_t> fqDomainData(fft_size, 0);
-      std::vector<potential_t> tmDomainData(NCHILD * nConv, 0);
+      std::vector<complex_t> fqDomainData(fftSize, 0);
+      std::vector<potential_t> tmDomainData(NCHILD * m_numConvPoints, 0);
       complex_t* dn_check_f = reinterpret_cast<complex_t*>(
-          &fft_out[fft_size * 2 * node_idx]);
+          &fft_out[fftSize * 2 * node_idx]);
       potential_t* dn_equiv = &all_dn_equiv[ifft_offset[node_idx]];
-      for (int k = 0; k < nFreq; k++){
+      for (int k = 0; k < m_numFreq; k++){
         for (int j = 0; j < NCHILD; j++) {
-            fqDomainData[nFreq * j + k] = dn_check_f[NCHILD * k + j];
+            fqDomainData[m_numFreq * j + k] = dn_check_f[NCHILD * k + j];
         }
       }
       fft_t::execute(plan, fqDomainData.data(), tmDomainData.data());
-      for (int k = 0; k < nSurf; k++) {
+      for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          dn_equiv[nSurf * j + k] += tmDomainData[idx + j * nConv];
+          dn_equiv[m_numSurf * j + k] += tmDomainData[idx + j * m_numConvPoints];
       }
     }
   fft_t::destroy_plan(plan);

@@ -34,16 +34,16 @@ int main(int argc, char **argv) {
       init_targets<real_t>(args.numBodies, args.distribution, 5);
 
   start("Total");
-  LaplaceFmm fmm(args.P, args.ncrit);
+  LaplaceFmm fmm(args.P, args.numCrit);
 #if NON_ADAPTIVE
-  fmm.depth = args.maxlevel;
+  fmm.m_depth = args.maxlevel;
 #endif
 
   start("Build Tree");
   auto [boxCentre, boxHalfSide] =
       get_bounds<LaplaceFmm::potential_t>(sources, targets);
-  fmm.x0 = boxCentre;
-  fmm.r0 = boxHalfSide;
+  fmm.m_x0 = boxCentre;
+  fmm.m_r0 = boxHalfSide;
   adaptive_tree tree(sources, targets, fmm);
   stop("Build Tree");
 
@@ -79,11 +79,11 @@ int main(int argc, char **argv) {
   print("Gradient Error L2", err[1]);
 
   print_divider("Tree");
-  print("Root Center x", fmm.x0[0]);
-  print("Root Center y", fmm.x0[1]);
-  print("Root Center z", fmm.x0[2]);
-  print("Root Radius R", fmm.r0);
-  print("Tree Depth", fmm.depth);
+  print("Root Center x", fmm.m_x0[0]);
+  print("Root Center y", fmm.m_x0[1]);
+  print("Root Center z", fmm.m_x0[2]);
+  print("Root Radius R", fmm.m_r0);
+  print("Tree Depth", fmm.m_depth);
   print("Leaf Nodes", tree.leaves().size());
 
   return 0;

@@ -25,7 +25,7 @@ namespace ExaFMM {
 
 class Args {
  public:
-  int ncrit;
+  int numCrit;
   const char* distribution;
   double k;
   int maxlevel;
@@ -59,7 +59,7 @@ class Args {
         " --numBodies (-n)              : Number of bodies (%d)\n"
         " --P (-P)                      : Order of expansion (%d)\n"
         " --threads (-T)                : Number of threads (%d)\n",
-        name, ncrit, distribution, k, maxlevel, numBodies, P, threads);
+        name, numCrit, distribution, k, maxlevel, numBodies, P, threads);
   }
 
   const char* parseDistribution(const char* arg) {
@@ -79,7 +79,7 @@ class Args {
 
  public:
   Args(int argc = 0, char** argv = nullptr)
-      : ncrit(64),
+      : numCrit(64),
         distribution("cube"),
         k(20),
         maxlevel(5),
@@ -93,7 +93,7 @@ class Args {
     auto settings = docopt::docopt(docString, {argv + 1, argv + argc});
     for (auto& setting : settings) {
       if (setting.first == "ncrit") {
-        ncrit = setting.second.asLong();
+        numCrit = setting.second.asLong();
       } else if (setting.first == "distribution") {
         distribution = parseDistribution(setting.second.asString().data());
       } else if (setting.first == "k") {
@@ -112,7 +112,7 @@ class Args {
 
   void print(int stringLength = 20) {
     std::cout << std::setw(stringLength) << std::fixed << std::left << "ncrit"
-              << " : " << ncrit << std::endl
+              << " : " << numCrit << std::endl
               << std::setw(stringLength) << "distribution"
               << " : " << distribution << std::endl
               << std::setw(stringLength) << "numBodies"
