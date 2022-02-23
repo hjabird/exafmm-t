@@ -624,91 +624,83 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  void hadamard_product(std::vector<size_t>& interaction_count_offset,
-                        std::vector<size_t>& interaction_offset_f,
-                        std::vector<real_t>& fft_in,
-                        std::vector<real_t>& fft_out,
-                        std::vector<std::vector<real_t>>& matrix_M2L) {
-    size_t fftSize = 2 * NCHILD * m_numFreq;
-    std::vector<real_t> zero_vec0(fftSize, 0.);
-    std::vector<real_t> zero_vec1(fftSize, 0.);
+  std::vector<complex_t> hadamard_product(std::vector<size_t>& interactionCountOffset,
+                        std::vector<size_t>& interactionOffsetF,
+                        std::vector<complex_t>& fftIn,
+                        std::vector<std::vector<real_t>>& matrixM2L) {
+    const size_t fftSize = NCHILD * m_numFreq;
+    std::vector<complex_t> fftOut(interactionCountOffset.size() * fftSize, 0);
+    std::vector<real_t> zeroVec0(fftSize * 2, 0.);
+    std::vector<real_t> zeroVec1(fftSize * 2, 0.);
 
-    size_t nPos = matrix_M2L.size();
-    size_t nblk_inter =
-        interaction_count_offset.size();  // num of blocks of interactions
-    size_t nblk_trg = nblk_inter / nPos;  // num of blocks based on targetNodes
-    int BLOCK_SIZE = CACHE_SIZE * 2 / sizeof(real_t);
-    std::vector<real_t*> IN_(BLOCK_SIZE * nblk_inter);
-    std::vector<real_t*> OUT_(BLOCK_SIZE * nblk_inter);
-
-    // initialize fft_out with zero
-#pragma omp parallel for
-    for (int i = 0; i < static_cast<int>(fft_out.capacity() / fftSize); ++i) {
-      std::memset(fft_out.data() + i * fftSize, 0, fftSize * sizeof(real_t));
-    }
+    const size_t nPos = matrixM2L.size();
+    // The number of blocks of interactions
+    const size_t nBlockInteractions = interactionCountOffset.size();  
+    // The number of blocks based on targetNodes
+    size_t nBlockTargets = nBlockInteractions / nPos;
+    const size_t blockSize = CACHE_SIZE * 2 / sizeof(real_t);
+    std::vector<real_t*> IN_(blockSize * nBlockInteractions);
+    std::vector<real_t*> OUT_(blockSize * nBlockInteractions);
 
 #pragma omp parallel for
-    for (int iblk_inter = 0; iblk_inter < static_cast<int>(nblk_inter);
-         iblk_inter++) {
-      size_t interaction_count_offset0 =
-          (iblk_inter == 0 ? 0 : interaction_count_offset[iblk_inter - 1]);
-      size_t interaction_count_offset1 = interaction_count_offset[iblk_inter];
-      size_t interaction_count =
-          interaction_count_offset1 - interaction_count_offset0;
-      for (size_t j = 0; j < interaction_count; j++) {
-        IN_[BLOCK_SIZE * iblk_inter + j] =
-            &fft_in[interaction_offset_f[(interaction_count_offset0 + j) * 2 +
-                                         0]];
-        OUT_[BLOCK_SIZE * iblk_inter + j] =
-            &fft_out[interaction_offset_f[(interaction_count_offset0 + j) * 2 +
-                                          1]];
+    for (int iBlockInteractions = 0; 
+         iBlockInteractions < static_cast<int>(nBlockInteractions);
+         iBlockInteractions++) {
+      size_t interactionCountOffset0 =
+          (iBlockInteractions == 0 ? 0 : interactionCountOffset[iBlockInteractions - 1]);
+      size_t interactionCountOffset1 = interactionCountOffset[iBlockInteractions];
+      size_t interactionCount =
+          interactionCountOffset1 - interactionCountOffset0;
+      for (size_t j = 0; j < interactionCount; j++) {
+        IN_[blockSize * iBlockInteractions + j] =
+            reinterpret_cast<real_t*>(fftIn.data()) + 
+            interactionOffsetF[(interactionCountOffset0 + j) * 2 + 0];
+        OUT_[blockSize * iBlockInteractions + j] =
+            reinterpret_cast<real_t*>(fftOut.data()) + 
+            interactionOffsetF[(interactionCountOffset0 + j) * 2 + 1];
       }
-      IN_[BLOCK_SIZE * iblk_inter + interaction_count] = &zero_vec0[0];
-      OUT_[BLOCK_SIZE * iblk_inter + interaction_count] = &zero_vec1[0];
+      IN_[blockSize * iBlockInteractions + interactionCount] = zeroVec0.data();
+      OUT_[blockSize * iBlockInteractions + interactionCount] = zeroVec1.data();
     }
 
-    for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
+    for (size_t iBlockTargets = 0; iBlockTargets < nBlockTargets; iBlockTargets++) {
       //#pragma omp parallel for
       for (int k = 0; k < m_numFreq; k++) {
-        for (size_t ipos = 0; ipos < nPos; ipos++) {
-          size_t iblk_inter = iblk_trg * nPos + ipos;
-          size_t interaction_count_offset0 =
-              (iblk_inter == 0 ? 0 : interaction_count_offset[iblk_inter - 1]);
-          size_t interaction_count_offset1 =
-              interaction_count_offset[iblk_inter];
-          size_t interaction_count =
-              interaction_count_offset1 - interaction_count_offset0;
-          real_t** IN = &IN_[BLOCK_SIZE * iblk_inter];
-          real_t** OUT = &OUT_[BLOCK_SIZE * iblk_inter];
+        for (size_t iPos = 0; iPos < nPos; iPos++) {
+          size_t iBlockInteractions = iBlockTargets * nPos + iPos;
+          size_t interactionCountOffset0 =
+              (iBlockInteractions == 0 ? 0 : interactionCountOffset[iBlockInteractions - 1]);
+          size_t interactionCountOffset1 =
+              interactionCountOffset[iBlockInteractions];
+          size_t interactionCount =
+              interactionCountOffset1 - interactionCountOffset0;
+          real_t** IN = &IN_[blockSize * iBlockInteractions];
+          real_t** OUT = &OUT_[blockSize * iBlockInteractions];
           real_t* M =
-              &matrix_M2L[ipos]
+              &matrixM2L[iPos]
                          [k * 2 * NCHILD *
                           NCHILD];  // k-th freq's (row) offset in matrix_M2L
-          for (size_t j = 0; j < interaction_count; j += 2) {
-            complex_t* M_ = reinterpret_cast<complex_t*>(M);
-            complex_t* IN0 = reinterpret_cast<complex_t*>(
-                IN[j + 0] + k * NCHILD * 2);  // go to k-th freq chunk
-            complex_t* IN1 =
-                reinterpret_cast<complex_t*>(IN[j + 1] + k * NCHILD * 2);
-            complex_t* OUT0 =
-                reinterpret_cast<complex_t*>(OUT[j + 0] + k * NCHILD * 2);
-            complex_t* OUT1 =
-                reinterpret_cast<complex_t*>(OUT[j + 1] + k * NCHILD * 2);
+          for (size_t j = 0; j < interactionCount; j += 2) {
             using l_matrix_t = Eigen::Matrix<complex_t, 8, 8, column_major>;
             using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
             using l_mapped_matrix_t = Eigen::Map<l_matrix_t>;
             using l_mapped_vector_t = Eigen::Map<l_vector_t>;
-            auto mat = l_mapped_matrix_t(M_);
-            auto in0 = l_mapped_vector_t(IN0);
-            auto in1 = l_mapped_vector_t(IN1);
-            auto out0 = l_mapped_vector_t(OUT0);
-            auto out1 = l_mapped_vector_t(OUT1);
+            auto mat = l_mapped_matrix_t(reinterpret_cast<complex_t*>(M));
+            auto in0 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
+                IN[j + 0] + k * NCHILD * 2));
+            auto in1 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
+                IN[j + 1] + k * NCHILD * 2));
+            auto out0 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
+                OUT[j + 0] + k * NCHILD * 2));
+            auto out1 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
+                OUT[j + 1] + k * NCHILD * 2));
             out0 += mat * in0;
             out1 += mat * in1;
           }
         }
       }
     }
+    return fftOut;
   }
 
   void M2L(nodevec_t& nodes) {
@@ -747,13 +739,11 @@ class Fmm : public p2p_methods<FmmKernel> {
       for (size_t i{0}; i < nPos; ++i) {
         ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), mSize);
       }
-      std::vector<real_t> fftIn, fftOut;
-      fftIn.resize(m_m2lData[l].fft_offset.size() * fftSize);
-      fftOut.resize(m_m2lData[l].ifft_offset.size() * fftSize);
-      fft_up_equiv(m_m2lData[l].fft_offset, allUpEquiv, fftIn);
-      hadamard_product(m_m2lData[l].interaction_count_offset,
-          m_m2lData[l].interaction_offset_f, fftIn, fftOut,
-                       matrix_M2L);
+      std::vector<complex_t> fftIn = fft_up_equiv(
+          m_m2lData[l].fft_offset, allUpEquiv);
+      std::vector<complex_t> fftOut = hadamard_product(
+          m_m2lData[l].interaction_count_offset,
+          m_m2lData[l].interaction_offset_f, fftIn, matrix_M2L);
       ifft_dn_check(m_m2lData[l].ifft_offset, fftOut, allDnEquiv);
     }
     // update all downward check potentials
@@ -862,13 +852,13 @@ class Fmm : public p2p_methods<FmmKernel> {
     fft_t::destroy_plan(plan);
   }
 
-  void fft_up_equiv(std::vector<size_t>& fft_offset,
-                    std::vector<potential_t>& all_up_equiv,
-                    std::vector<real_t>& fft_in) {
+  std::vector<complex_t> fft_up_equiv(std::vector<size_t>& fftOffset,
+                    std::vector<potential_t>& allUpEquiv) {
     const int nConv = m_numConvPoints;
     auto map = generate_surf2conv_up<potential_t>(m_p);
 
     size_t fftSize = NCHILD * m_numFreq;
+    std::vector<complex_t> fftIn(fftOffset.size() * fftSize);
     std::vector<potential_t> fftwIn(nConv * NCHILD);
     std::vector<complex_t> fftwOut(fftSize);
     ivec3 dim = ivec3{m_p, m_p, m_p } * 2;
@@ -878,37 +868,37 @@ class Fmm : public p2p_methods<FmmKernel> {
         fftwIn.data(), nullptr, 1, nConv,
         fftwOut.data(), nullptr, 1, m_numFreq);
 #pragma omp parallel for
-    for (int node_idx = 0; node_idx < static_cast<int>(fft_offset.size());
+    for (int node_idx = 0; node_idx < static_cast<int>(fftOffset.size());
          node_idx++) {
       std::vector<complex_t> buffer(fftSize, 0);
       std::vector<potential_t> equiv_t(NCHILD * nConv, potential_t(0.));
 
-      potential_t* up_equiv =
-          &all_up_equiv[fft_offset[node_idx]];  // offset ptr of node's 8
+      potential_t* upEquiv =
+          &allUpEquiv[fftOffset[node_idx]];  // offset ptr of node's 8
                                                 // child's up_equiv in
                                                 // all_up_equiv, size=8*m_numSurf_
-      complex_t* up_equiv_f = reinterpret_cast<complex_t*>(
-          &fft_in[fftSize * 2 * node_idx]);  // offset ptr of node_idx in fft_in
-                                         // vector, size=fftsize
+       // offset ptr of node_idx in fftIn vector, size=fftsize
+      complex_t* upEquivF = &fftIn[fftSize * node_idx];
 
       for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          equiv_t[idx + j * nConv] = up_equiv[j * m_numSurf + k];
+          equiv_t[idx + j * nConv] = upEquiv[j * m_numSurf + k];
       }
-      fft_t::execute(plan, &equiv_t[0], buffer.data());
+      fft_t::execute(plan, equiv_t.data(), buffer.data());
       for (int k = 0; k < m_numFreq; k++) {
         for (int j = 0; j < NCHILD; j++) {
-          up_equiv_f[NCHILD * k + j] = buffer[m_numFreq * j + k];
+          upEquivF[NCHILD * k + j] = buffer[m_numFreq * j + k];
         }
       }
     }
     fft_t::destroy_plan(plan);
+    return fftIn;
   }
 
-  void ifft_dn_check(std::vector<size_t>& ifft_offset,
-                     std::vector<real_t>& fft_out,
-                     std::vector<potential_t>& all_dn_equiv) {
+  void ifft_dn_check(std::vector<size_t>& ifftOffset,
+                     std::vector<complex_t>& fftOut,
+                     std::vector<potential_t>& allDownEquiv) {
     auto map = generate_surf2conv_dn<potential_t>(m_p);
 
     size_t fftSize = NCHILD * m_numFreq;
@@ -924,26 +914,25 @@ class Fmm : public p2p_methods<FmmKernel> {
       fftwOut.data(), nullptr, 1, m_numConvPoints);
 
 #pragma omp parallel for
-    for (int node_idx = 0; node_idx < static_cast<int>(ifft_offset.size());
+    for (int node_idx = 0; node_idx < static_cast<int>(ifftOffset.size());
          node_idx++) {
       std::vector<complex_t> fqDomainData(fftSize, 0);
       std::vector<potential_t> tmDomainData(NCHILD * m_numConvPoints, 0);
-      complex_t* dn_check_f = reinterpret_cast<complex_t*>(
-          &fft_out[fftSize * 2 * node_idx]);
-      potential_t* dn_equiv = &all_dn_equiv[ifft_offset[node_idx]];
+      potential_t* downEquiv = &allDownEquiv[ifftOffset[node_idx]];
       for (int k = 0; k < m_numFreq; k++){
         for (int j = 0; j < NCHILD; j++) {
-            fqDomainData[m_numFreq * j + k] = dn_check_f[NCHILD * k + j];
+            fqDomainData[m_numFreq * j + k] = 
+                fftOut[fftSize * node_idx + NCHILD * k + j];
         }
       }
       fft_t::execute(plan, fqDomainData.data(), tmDomainData.data());
       for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          dn_equiv[m_numSurf * j + k] += tmDomainData[idx + j * m_numConvPoints];
+          downEquiv[m_numSurf * j + k] += tmDomainData[idx + j * m_numConvPoints];
       }
     }
-  fft_t::destroy_plan(plan);
+    fft_t::destroy_plan(plan);
   }
 };
 
