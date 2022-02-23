@@ -802,13 +802,9 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<std::vector<complex_t>> matrix_M2L(REL_COORD[M2L_Type].size(),
                                                 std::vector<complex_t>(fftSize));
     // create fft plan
-    std::vector<potential_t> fftwIn(m_numConvPoints);
-    std::vector<complex_t> fftwOut(m_numFreq);
     ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
+    fft<potential_t, fft_dir::forwards> fftPlan(3, dim.data());
 
-    using fft_t = fft<potential_t, fft_dir::forwards>;
-    fft_t::plan_t plan;
-    plan = fft_t::plan_one(3, dim.data(), fftwIn.data(), fftwOut.data());
     coord_t targetCoord = coord_t::Zero();
     for (int l = 1; l < m_depth + 1; ++l) {
       // compute M2L kernel matrix, perform DFT
@@ -826,7 +822,7 @@ class Fmm : public p2p_methods<FmmKernel> {
         // potentials on convolution grid
         auto convValue =
             kernel_matrix<dynamic>(convolutionCoords, targetCoord);
-        fft_t::execute(plan, convValue.data(), matrix_M2L_Helper[i].data());
+        fftPlan.execute(convValue.data(), matrix_M2L_Helper[i].data());
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
       //#pragma omp parallel for
@@ -849,7 +845,6 @@ class Fmm : public p2p_methods<FmmKernel> {
             fftSize * sizeof(complex_t));
       }
     }
-    fft_t::destroy_plan(plan);
   }
 
   std::vector<complex_t> fft_up_equiv(std::vector<size_t>& fftOffset,
@@ -859,14 +854,9 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     size_t fftSize = NCHILD * m_numFreq;
     std::vector<complex_t> fftIn(fftOffset.size() * fftSize);
-    std::vector<potential_t> fftwIn(nConv * NCHILD);
-    std::vector<complex_t> fftwOut(fftSize);
     ivec3 dim = ivec3{m_p, m_p, m_p } * 2;
-    using fft_t = fft<potential_t, fft_dir::forwards>;
-    fft_t::plan_t plan;
-    plan = fft_t::plan_many(3, dim.data(), NCHILD,
-        fftwIn.data(), nullptr, 1, nConv,
-        fftwOut.data(), nullptr, 1, m_numFreq);
+    fft<potential_t, fft_dir::forwards> fftPlan(
+        3, dim.data(), NCHILD, nConv, m_numFreq);
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(fftOffset.size());
          node_idx++) {
@@ -885,14 +875,13 @@ class Fmm : public p2p_methods<FmmKernel> {
         for (int j = 0; j < NCHILD; j++)
           equiv_t[idx + j * nConv] = upEquiv[j * m_numSurf + k];
       }
-      fft_t::execute(plan, equiv_t.data(), buffer.data());
+      fftPlan.execute(equiv_t.data(), buffer.data());
       for (int k = 0; k < m_numFreq; k++) {
         for (int j = 0; j < NCHILD; j++) {
           upEquivF[NCHILD * k + j] = buffer[m_numFreq * j + k];
         }
       }
     }
-    fft_t::destroy_plan(plan);
     return fftIn;
   }
 
@@ -902,16 +891,9 @@ class Fmm : public p2p_methods<FmmKernel> {
     auto map = generate_surf2conv_dn<potential_t>(m_p);
 
     size_t fftSize = NCHILD * m_numFreq;
-    std::vector<complex_t> fftwIn(fftSize);
-    std::vector<potential_t> fftwOut(m_numConvPoints * NCHILD);
     ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
-
-    using fft_t = fft<potential_t, fft_dir::backwards>;
-    fft_t::plan_t plan;
-    plan = fft_t::plan_many(
-      3, dim.data(), NCHILD, 
-      fftwIn.data(), nullptr, 1, m_numFreq,
-      fftwOut.data(), nullptr, 1, m_numConvPoints);
+    fft<potential_t, fft_dir::backwards> fftPlan(
+        3, dim.data(), NCHILD, m_numFreq, m_numConvPoints);
 
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(ifftOffset.size());
@@ -925,14 +907,13 @@ class Fmm : public p2p_methods<FmmKernel> {
                 fftOut[fftSize * node_idx + NCHILD * k + j];
         }
       }
-      fft_t::execute(plan, fqDomainData.data(), tmDomainData.data());
+      fftPlan.execute(fqDomainData.data(), tmDomainData.data());
       for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
           downEquiv[m_numSurf * j + k] += tmDomainData[idx + j * m_numConvPoints];
       }
     }
-    fft_t::destroy_plan(plan);
   }
 };
 
