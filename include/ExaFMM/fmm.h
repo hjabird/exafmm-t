@@ -598,7 +598,7 @@ class Fmm : public p2p_methods<FmmKernel> {
           nblk_trg = 1; 
       }
       size_t interactionCountOffsetVar = 0;
-      size_t fftSize = 2 * NCHILD * m_numFreq;
+      size_t fftSize = NCHILD * m_numFreq;
       for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
         size_t blk_start = (targetNodes[l].size() * iblk_trg) / nblk_trg;
         size_t blk_end = (targetNodes[l].size() * (iblk_trg + 1)) / nblk_trg;
@@ -606,11 +606,11 @@ class Fmm : public p2p_methods<FmmKernel> {
           for (size_t i = blk_start; i < blk_end; i++) {
             nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
             if (M2L_list[k]) {
+              // src_node's displacement in fftIn:
               interactionOffsetF.push_back(
-                  M2L_list[k]->indexM2L() *
-                  fftSize);  // src_node's displacement in fft_in
-              interactionOffsetF.push_back(
-                  i * fftSize);  // trg_node's displacement in fft_out
+                  M2L_list[k]->indexM2L() * fftSize);  
+              // trg_node's displacement in fftOut:
+              interactionOffsetF.push_back(i * fftSize); 
               interactionCountOffsetVar++;
             }
           }
@@ -627,20 +627,20 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<complex_t> hadamard_product(std::vector<size_t>& interactionCountOffset,
                         std::vector<size_t>& interactionOffsetF,
                         std::vector<complex_t>& fftIn,
-                        std::vector<std::vector<real_t>>& matrixM2L) {
+      std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>& matrixM2L) {
     const size_t fftSize = NCHILD * m_numFreq;
     std::vector<complex_t> fftOut(interactionCountOffset.size() * fftSize, 0);
-    std::vector<real_t> zeroVec0(fftSize * 2, 0.);
-    std::vector<real_t> zeroVec1(fftSize * 2, 0.);
+    std::vector<complex_t> zeroVec0(fftSize, 0.);
+    std::vector<complex_t> zeroVec1(fftSize, 0.);
 
     const size_t nPos = matrixM2L.size();
     // The number of blocks of interactions
     const size_t nBlockInteractions = interactionCountOffset.size();  
     // The number of blocks based on targetNodes
     size_t nBlockTargets = nBlockInteractions / nPos;
-    const size_t blockSize = CACHE_SIZE * 2 / sizeof(real_t);
-    std::vector<real_t*> IN_(blockSize * nBlockInteractions);
-    std::vector<real_t*> OUT_(blockSize * nBlockInteractions);
+    const size_t blockSize = CACHE_SIZE / sizeof(complex_t);
+    std::vector<complex_t*> IN_(blockSize * nBlockInteractions);
+    std::vector<complex_t*> OUT_(blockSize * nBlockInteractions);
 
 #pragma omp parallel for
     for (int iBlockInteractions = 0; 
@@ -653,10 +653,10 @@ class Fmm : public p2p_methods<FmmKernel> {
           interactionCountOffset1 - interactionCountOffset0;
       for (size_t j = 0; j < interactionCount; j++) {
         IN_[blockSize * iBlockInteractions + j] =
-            reinterpret_cast<real_t*>(fftIn.data()) + 
+            fftIn.data() + 
             interactionOffsetF[(interactionCountOffset0 + j) * 2 + 0];
         OUT_[blockSize * iBlockInteractions + j] =
-            reinterpret_cast<real_t*>(fftOut.data()) + 
+            fftOut.data() + 
             interactionOffsetF[(interactionCountOffset0 + j) * 2 + 1];
       }
       IN_[blockSize * iBlockInteractions + interactionCount] = zeroVec0.data();
@@ -674,28 +674,17 @@ class Fmm : public p2p_methods<FmmKernel> {
               interactionCountOffset[iBlockInteractions];
           size_t interactionCount =
               interactionCountOffset1 - interactionCountOffset0;
-          real_t** IN = &IN_[blockSize * iBlockInteractions];
-          real_t** OUT = &OUT_[blockSize * iBlockInteractions];
-          real_t* M =
-              &matrixM2L[iPos]
-                         [k * 2 * NCHILD *
-                          NCHILD];  // k-th freq's (row) offset in matrix_M2L
-          for (size_t j = 0; j < interactionCount; j += 2) {
-            using l_matrix_t = Eigen::Matrix<complex_t, 8, 8, column_major>;
+          complex_t** IN = &IN_[blockSize * iBlockInteractions];
+          complex_t** OUT = &OUT_[blockSize * iBlockInteractions];
+          // k-th freq's (row) offset in matrix_M2L:
+          complex_matrix_t<NCHILD, NCHILD, column_major>& M = matrixM2L[iPos][k];
+          // Matrix vector product {8} = [8,8] * {8} for all interactions:
+          for (size_t j = 0; j < interactionCount; j++) {
             using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
-            using l_mapped_matrix_t = Eigen::Map<l_matrix_t>;
             using l_mapped_vector_t = Eigen::Map<l_vector_t>;
-            auto mat = l_mapped_matrix_t(reinterpret_cast<complex_t*>(M));
-            auto in0 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
-                IN[j + 0] + k * NCHILD * 2));
-            auto in1 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
-                IN[j + 1] + k * NCHILD * 2));
-            auto out0 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
-                OUT[j + 0] + k * NCHILD * 2));
-            auto out1 = l_mapped_vector_t(reinterpret_cast<complex_t*>(
-                OUT[j + 1] + k * NCHILD * 2));
-            out0 += mat * in0;
-            out1 += mat * in1;
+            auto in = l_mapped_vector_t(IN[j] + k * NCHILD);
+            auto out = l_mapped_vector_t(OUT[j] + k * NCHILD);
+            out += M * in;
           }
         }
       }
@@ -705,25 +694,26 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   void M2L(nodevec_t& nodes) {
     const int nSurf = m_numSurf;
-    int fftSize = 2 * NCHILD * m_numFreq;
     size_t nNodes = nodes.size();
     size_t nPos = REL_COORD[M2L_Type].size();  // number of relative positions
 
     // allocate memory
-    std::vector<potential_t> allUpEquiv, allDnEquiv;
-    allUpEquiv.resize(nNodes * nSurf);
-    allDnEquiv.resize(nNodes * nSurf);
-    std::vector<std::vector<real_t>> matrix_M2L(
-        nPos, std::vector<real_t>(fftSize * NCHILD, 0));
+    std::vector<potential_t> allUpEquiv(nNodes * nSurf), 
+        allDnEquiv(nNodes * nSurf);
+    // matrixM2L[nPos index][frequency index] -> 8*8 matrix.
+    std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>> matrixM2L(
+        nPos, std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>(m_numFreq,
+            complex_matrix_t<NCHILD, NCHILD, column_major>::Zero(NCHILD, NCHILD)));
 
-    // setup ifstream of M2L precomputation matrix
+    // Setup ifstream of M2L pre-computation matrix
     std::ifstream ifile(m_fileName, std::ifstream::binary);
     ifile.seekg(0, ifile.end);
-    size_t fSize = ifile.tellg();  // file size in bytes
-    size_t mSize = NCHILD * NCHILD * m_numFreq * 2 *
-                   sizeof(real_t);  // size in bytes for each M2L matrix
-    ifile.seekg(fSize - m_depth * nPos * mSize,
-                ifile.beg);  // go to the start of M2L section
+    // The size of the M2L matrix cache file:
+    size_t fSize = ifile.tellg();
+    // The size in bytes for each M2L matrix:
+    size_t mSize = NCHILD * NCHILD * m_numFreq * sizeof(complex_t); 
+    // Jump to the start of the M2L matrix section:
+    ifile.seekg(fSize - m_depth * nPos * mSize, ifile.beg); 
 
     // collect all upward equivalent charges
     //#pragma omp parallel for collapse(2)
@@ -737,13 +727,13 @@ class Fmm : public p2p_methods<FmmKernel> {
     for (size_t l{0}; l < m_depth; ++l) {
       // load M2L matrix for current level
       for (size_t i{0}; i < nPos; ++i) {
-        ifile.read(reinterpret_cast<char*>(matrix_M2L[i].data()), mSize);
+        ifile.read(reinterpret_cast<char*>(matrixM2L[i].data()), mSize);
       }
       std::vector<complex_t> fftIn = fft_up_equiv(
           m_m2lData[l].fft_offset, allUpEquiv);
       std::vector<complex_t> fftOut = hadamard_product(
           m_m2lData[l].interaction_count_offset,
-          m_m2lData[l].interaction_offset_f, fftIn, matrix_M2L);
+          m_m2lData[l].interaction_offset_f, fftIn, matrixM2L);
       ifft_dn_check(m_m2lData[l].ifft_offset, fftOut, allDnEquiv);
     }
     // update all downward check potentials
