@@ -100,8 +100,10 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<potential_matrix_t<dynamic, dynamic>> matrix_DC2E_U;
   std::vector<potential_matrix_t<dynamic, dynamic>> matrix_DC2E_V;
 
-  std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_M2M;
-  std::vector<std::vector<potential_matrix_t<dynamic, dynamic>>> matrix_L2L;
+  std::vector<std::array<
+      potential_matrix_t<dynamic, dynamic>, REL_COORD_M2M.size()>> matrix_M2M;
+  std::vector<std::array<
+      potential_matrix_t<dynamic, dynamic>, REL_COORD_L2L.size()>> matrix_L2L;
 
   std::vector<M2LData<real_t>> m_m2lData;
 
@@ -329,10 +331,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     matrix_M2M.resize(depth + 1);
     matrix_L2L.resize(depth + 1);
     for (int level = 0; level <= depth; ++level) {
-      matrix_M2M[level].resize(REL_COORD[M2M_Type].size(),
-                               potential_matrix_t<>(nSurf, nSurf));
-      matrix_L2L[level].resize(REL_COORD[L2L_Type].size(),
-                               potential_matrix_t<>(nSurf, nSurf));
+        std::fill(matrix_M2M[level].begin(), matrix_M2M[level].end(),
+            potential_matrix_t<>(nSurf, nSurf));
+        std::fill(matrix_L2L[level].begin(), matrix_L2L[level].end(),
+            potential_matrix_t<>(nSurf, nSurf));
     }
   }
 
@@ -344,11 +346,11 @@ class Fmm : public p2p_methods<FmmKernel> {
           m_p, m_r0, level, parentCoord, 2.95);
       real_t s = m_r0 * std::pow(0.5, level + 1);
       int npos = static_cast<int>(
-          REL_COORD[M2M_Type].size());  // number of relative positions
+          REL_COORD_M2M.size());  // number of relative positions
 #pragma omp parallel for
       for (int i = 0; i < npos; i++) {
         // compute kernel matrix
-        ivec3& coord = REL_COORD[M2M_Type][i];
+        ivec3& coord = REL_COORD_M2M[i];
         coord_t childCoord{ parentCoord };
         for (int d{0}; d < 3; ++d) {
             childCoord(d) += coord[d] * s;
@@ -549,7 +551,7 @@ class Fmm : public p2p_methods<FmmKernel> {
   void M2L_setup(nodeptrvec_t& nonleafs) {
     const int depth = m_depth;
     int nPos = static_cast<int>(
-        REL_COORD[M2L_Type].size());  // number of M2L relative positions
+        REL_COORD_M2L.size());  // number of M2L relative positions
     m_m2lData.resize(depth);           // initialize m2ldata
 
     // construct lists of target nodes for M2L operator at each level
@@ -695,7 +697,7 @@ class Fmm : public p2p_methods<FmmKernel> {
   void M2L(nodevec_t& nodes) {
     const int nSurf = m_numSurf;
     size_t nNodes = nodes.size();
-    size_t nPos = REL_COORD[M2L_Type].size();  // number of relative positions
+    constexpr size_t nPos = REL_COORD_M2L.size();  // number of relative positions
 
     // allocate memory
     std::vector<potential_t> allUpEquiv(nNodes * nSurf), 
@@ -787,40 +789,41 @@ class Fmm : public p2p_methods<FmmKernel> {
   // ################################################################################
   void precompute_M2L(std::ofstream& file) {
     int fftSize = m_numFreq * NCHILD * NCHILD;
-    std::vector<std::vector<complex_t>> matrix_M2L_Helper(
-        REL_COORD[M2L_Helper_Type].size(), std::vector<complex_t>(m_numFreq));
-    std::vector<std::vector<complex_t>> matrix_M2L(REL_COORD[M2L_Type].size(),
-                                                std::vector<complex_t>(fftSize));
+    std::array<std::vector<complex_t>, REL_COORD_M2L_helper.size()> matrix_M2L_Helper;
+    std::fill(matrix_M2L_Helper.begin(), matrix_M2L_Helper.end(),
+        std::vector<complex_t>(m_numFreq));
+    std::array<std::vector<complex_t>, REL_COORD_M2L.size()> matrix_M2L;
+    std::fill(matrix_M2L.begin(), matrix_M2L.end(), std::vector<complex_t>(fftSize));
+
     // create fft plan
     ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
     fft<potential_t, fft_dir::forwards> fftPlan(3, dim.data());
 
-    coord_t targetCoord = coord_t::Zero();
-    for (int l = 1; l < m_depth + 1; ++l) {
+    for (int level = 0; level < m_depth; ++level) {
       // compute M2L kernel matrix, perform DFT
       //#pragma omp parallel for
-      for (int i = 0; i < static_cast<int>(REL_COORD[M2L_Helper_Type].size());
+      for (int i = 0; i < static_cast<int>(REL_COORD_M2L_helper.size());
            ++i) {
         coord_t boxCentre;
         for (int d = 0; d < 3; d++) {
-          boxCentre[d] = REL_COORD[M2L_Helper_Type][i][d] * m_r0 *
-                         std::pow(0.5, l - 1);  // relative coords
+          boxCentre[d] = REL_COORD_M2L_helper[i][d] * m_r0 *
+                         std::pow(0.5, level);  // relative coords
         }
         coord_matrix_t<dynamic> convolutionCoords =
-            convolution_grid<potential_t>(m_p, m_r0, l,
+            convolution_grid<potential_t>(m_p, m_r0, level + 1,
                                           boxCentre);  // convolution grid
         // potentials on convolution grid
         auto convValue =
-            kernel_matrix<dynamic>(convolutionCoords, targetCoord);
+            kernel_matrix<dynamic>(convolutionCoords, coord_t{coord_t::Zero()});
         fftPlan.execute(convValue.data(), matrix_M2L_Helper[i].data());
       }
       // convert M2L_Helper to M2L and reorder data layout to improve locality
       //#pragma omp parallel for
-      for (int i{0}; i < static_cast<int>(REL_COORD[M2L_Type].size()); ++i) {
+      for (int i{0}; i < static_cast<int>(REL_COORD_M2L.size()); ++i) {
         for (int j = 0; j < NCHILD * NCHILD;
              j++) {  // loop over child's relative positions
           int childRelIdx = M2L_INDEX_MAP[i][j];
-          if (childRelIdx != -1) {
+          if (childRelIdx != 123456789) {
             for (int k = 0; k < m_numFreq; k++) {  // loop over frequencies
               int new_idx = k * (NCHILD * NCHILD) + j;
               matrix_M2L[i][new_idx] =

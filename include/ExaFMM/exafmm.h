@@ -16,11 +16,14 @@
 
 #include <cmath>
 #include <set>
+#include <vector>
+#include <map>
 
 #include "args.h"
 #include "fft.h"
 #include "node.h"
 #include "potential_traits.h"
+#include "relative_coords.h"
 
 namespace ExaFMM {
 
@@ -29,7 +32,6 @@ const int CACHE_SIZE = 512;
 const int NCHILD = 8;
 
 static constexpr auto PI = double(3.141592653589793238462643383279502884);
-typedef Eigen::Vector3i ivec3;  //!< Vector of 3 int types
 
 //! Interaction types that need to be pre-computed.
 typedef enum {
@@ -56,13 +58,11 @@ struct M2LData {
   std::vector<size_t> interaction_count_offset;
 };
 
-// Relative coordinates and interaction lists
-std::vector<std::vector<ivec3>>
-    REL_COORD;  //!< Vector of possible relative coordinates (inner) of each
-                //!< interaction type (outer)
-std::vector<std::vector<int>>
-    HASH_LUT;  //!< Vector of hash Lookup tables (inner) of relative positions
-               //!< for each interaction type (outer)
+detail::relative_coord_mapping<detail::coords_M2M> REL_COORD_M2M;
+detail::relative_coord_mapping<detail::coords_L2L> REL_COORD_L2L;
+detail::relative_coord_mapping<detail::coords_M2L> REL_COORD_M2L;
+detail::relative_coord_mapping<detail::coords_M2L_helper> REL_COORD_M2L_helper;
+
 std::vector<std::vector<int>>
     M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
 }  // namespace ExaFMM

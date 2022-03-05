@@ -232,7 +232,7 @@ template <typename T>
 void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
                     const unordered_map<uint64_t, size_t>& key2id) {
   using node_t = Node<T>;
-  node->M2Llist().resize(REL_COORD[M2L_Type].size(), nullptr);
+  node->M2Llist().resize(REL_COORD_M2L.size(), nullptr);
   node_t* curr = node;
   ivec3 min_iX = {0, 0, 0};
   ivec3 max_iX = ivec3::Ones(3) * (1 << curr->level());
@@ -254,8 +254,7 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
               if (key2id.find(col_key) != key2id.end()) {
                 node_t* col = &nodes[key2id.at(col_key)];
                 if (!col->is_leaf()) {
-                  int c_hash = hash(rel_coord);
-                  int idx = HASH_LUT[M2L_Type][c_hash];
+                  int idx = REL_COORD_M2L.hash(rel_coord);
                   curr->M2Llist()[idx] = col;
                 }
               }
@@ -278,7 +277,7 @@ void build_list(Nodes<typename FmmT::potential_t>& nodes, const FmmT& fmm) {
   using node_t = Node<typename FmmT::potential_t>;
   unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
   unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
-#pragma omp parallel for schedule(dynamic)
+//#pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < static_cast<int>(nodes.size()); i++) {
     node_t* node = &nodes[i];
     build_M2L_list(node, nodes, key2id);

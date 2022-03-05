@@ -14,6 +14,7 @@
 
 #include "exafmm.h"
 #include "predefines.h"
+#include "relative_coords.h"
 
 namespace ExaFMM {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
@@ -171,64 +172,26 @@ std::vector<int> generate_surf2conv_dn(int p) {
   return map;
 }
 
-/** Compute the hash value of a relative position (coordinates).
- *
- * @param coord Coordinates that represent a relative position.
- *
- * @return Hash value of the relative position (x + 10y + 100z + 555).
- */
-int hash(ivec3& coord) {
-  const int n = 5;
-  return ((coord[2] + n) * (2 * n) + (coord[1] + n)) * (2 * n) + (coord[0] + n);
-}
-
-/** Compute the coordinates of possible relative positions for operator t.
- *
- * @param max_r Max range.
- * @param min_r Min range.
- * @param step Step.
- * @param t Operator type (e.g. M2M, M2L)
- */
-void init_rel_coord(int max_r, int min_r, int step, Precompute_Type t) {
-  const int max_hash = 2000;
-  HASH_LUT[t].resize(max_hash, -1);
-  for (int k = -max_r; k <= max_r; k += step) {
-    for (int j = -max_r; j <= max_r; j += step) {
-      for (int i = -max_r; i <= max_r; i += step) {
-        if (abs(i) >= min_r || abs(j) >= min_r || abs(k) >= min_r) {
-          ivec3 coord;
-          coord[0] = i;
-          coord[1] = j;
-          coord[2] = k;
-          REL_COORD[t].push_back(coord);
-          HASH_LUT[t][hash(coord)] = static_cast<int>(REL_COORD[t].size() - 1);
-        }
-      }
-    }
-  }
-}
-
 //! Generate a map that maps indices of M2L_Type to indices of M2L_Helper_Type
 void generate_M2L_index_map() {
-  int npos = static_cast<int>(
-      REL_COORD[M2L_Type].size());  // number of relative coords for M2L_Type
-  M2L_INDEX_MAP.resize(npos, std::vector<int>(NCHILD * NCHILD));
+  // The number of relative coords for M2L_Type:
+  constexpr int nPos = static_cast<int>(REL_COORD_M2L.size());  
+  M2L_INDEX_MAP.resize(nPos, std::vector<int>(NCHILD * NCHILD));
 #pragma omp parallel for
-  for (int i = 0; i < npos; ++i) {
+  for (int i = 0; i < nPos; ++i) {
     for (int j1 = 0; j1 < NCHILD; ++j1) {
       for (int j2 = 0; j2 < NCHILD; ++j2) {
-        ivec3& parent_rel_coord = REL_COORD[M2L_Type][i];
-        ivec3 child_rel_coord;
-        child_rel_coord[0] =
-            parent_rel_coord[0] * 2 - (j1 / 1) % 2 + (j2 / 1) % 2;
-        child_rel_coord[1] =
-            parent_rel_coord[1] * 2 - (j1 / 2) % 2 + (j2 / 2) % 2;
-        child_rel_coord[2] =
-            parent_rel_coord[2] * 2 - (j1 / 4) % 2 + (j2 / 4) % 2;
-        int coord_hash = hash(child_rel_coord);
-        int child_rel_idx = HASH_LUT[M2L_Helper_Type][coord_hash];
+        ivec3 parentRelCoord = REL_COORD_M2L[i];
+        ivec3 childRelCoord;
+        childRelCoord[0] = 
+            parentRelCoord[0] * 2 - (j1 / 1) % 2 + (j2 / 1) % 2;
+        childRelCoord[1] =
+            parentRelCoord[1] * 2 - (j1 / 2) % 2 + (j2 / 2) % 2;
+        childRelCoord[2] =
+            parentRelCoord[2] * 2 - (j1 / 4) % 2 + (j2 / 4) % 2;
+        int childRelIdx = REL_COORD_M2L_helper.hash(childRelCoord);
         int j = j2 * NCHILD + j1;
-        M2L_INDEX_MAP[i][j] = child_rel_idx;
+        M2L_INDEX_MAP[i][j] = childRelIdx;
       }
     }
   }
@@ -239,12 +202,6 @@ void generate_M2L_index_map() {
 void init_rel_coord() {
   static bool is_initialized = false;
   if (!is_initialized) {
-    REL_COORD.resize(Type_Count);
-    HASH_LUT.resize(Type_Count);
-    init_rel_coord(1, 1, 2, M2M_Type);
-    init_rel_coord(1, 1, 2, L2L_Type);
-    init_rel_coord(3, 2, 1, M2L_Helper_Type);
-    init_rel_coord(1, 1, 1, M2L_Type);
     generate_M2L_index_map();
     is_initialized = true;
   }
