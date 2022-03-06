@@ -20,6 +20,8 @@ namespace ExaFMM {
 	typedef Eigen::Vector3i ivec3;  //!< Vector of 3 int types
 namespace detail {
 
+static constexpr int NCHILD = 8;
+
 // We need a constexpr version of abs.
 constexpr int abs(int x) { return x > 0 ? x : -x; }
 
@@ -84,10 +86,18 @@ public:
 		return ivec3{ s_relCoords[mapIdx] }; 
 	}
 
+	static constexpr int at(size_t mapIdx, int subIdx) {
+		return s_relCoords[mapIdx][subIdx];
+	}
+
 	// Obtain an index from an ivec3. Bad inputs return 123456789.
 	static constexpr size_t hash(ivec3 coord) {
 		size_t idx = coord_to_rel_coord_map_ijk_to_idx<mapping_def_t>(
 			coord[0], coord[1], coord[2]);
+		return s_hashCoords[idx];
+	}
+	static constexpr size_t hash(int i, int j, int k) {
+		size_t idx = coord_to_rel_coord_map_ijk_to_idx<mapping_def_t>(i, j, k);
 		return s_hashCoords[idx];
 	}
 
@@ -226,6 +236,55 @@ public:
 	static constexpr int includeBoxRadius{ 1 };
 	static constexpr int excludeBoxRadius{ 1 };
 	static constexpr int pointStride{ 1 };
+};
+
+
+/// Create a map of indices of M2L map to indices of M2L_helper map for 
+/// initialization of M2L_idx_map.
+constexpr auto generate_M2L_index_map() {
+	// The number of relative coords for M2L_Type:
+	using rc_M2L_t = relative_coord_mapping<detail::coords_M2L>;
+	using rc_M2L_helper_t = relative_coord_mapping<detail::coords_M2L_helper>;
+	constexpr int nPos = static_cast<int>(rc_M2L_t::size());
+	array<int[NCHILD * NCHILD], nPos> M2LIdxMap = {};
+	for (int i = 0; i < nPos; ++i) {
+		for (int j1 = 0; j1 < NCHILD; ++j1) {
+			for (int j2 = 0; j2 < NCHILD; ++j2) {
+				int parentRelCoord[3] = {};
+				parentRelCoord[0] = rc_M2L_t::at(i, 0);
+				parentRelCoord[1] = rc_M2L_t::at(i, 1);
+				parentRelCoord[2] = rc_M2L_t::at(i, 2);
+				int childRelCoord[3] = {};
+				childRelCoord[0] =
+					parentRelCoord[0] * 2 - (j1 / 1) % 2 + (j2 / 1) % 2;
+				childRelCoord[1] =
+					parentRelCoord[1] * 2 - (j1 / 2) % 2 + (j2 / 2) % 2;
+				childRelCoord[2] =
+					parentRelCoord[2] * 2 - (j1 / 4) % 2 + (j2 / 4) % 2;
+				int childRelIdx = static_cast<int>(rc_M2L_helper_t::hash(
+					childRelCoord[0], childRelCoord[1], childRelCoord[2]));
+				int j = j2 * NCHILD + j1;
+				M2LIdxMap[i][j] = childRelIdx;
+			}
+		}
+	}
+	return M2LIdxMap;
+}
+
+class M2L_idx_map {
+private:
+	// Alias for associated relative coords type.
+	using rel_coord_M2L_map_t = relative_coord_mapping<detail::coords_M2L>;
+
+	static constexpr size_t outerArraySize = rel_coord_M2L_map_t::size();
+
+	// The mapping storage.
+	static constexpr array<int[NCHILD * NCHILD],
+		outerArraySize> s_M2LMap = generate_M2L_index_map();
+public:
+	static constexpr size_t size() { return rel_coord_M2L_map_t::size(); }
+
+	const auto operator[](size_t idx) const noexcept { return s_M2LMap[idx]; }
 };
 
 } // namespace detail

@@ -172,39 +172,5 @@ std::vector<int> generate_surf2conv_dn(int p) {
   return map;
 }
 
-//! Generate a map that maps indices of M2L_Type to indices of M2L_Helper_Type
-void generate_M2L_index_map() {
-  // The number of relative coords for M2L_Type:
-  constexpr int nPos = static_cast<int>(REL_COORD_M2L.size());  
-  M2L_INDEX_MAP.resize(nPos, std::vector<int>(NCHILD * NCHILD));
-#pragma omp parallel for
-  for (int i = 0; i < nPos; ++i) {
-    for (int j1 = 0; j1 < NCHILD; ++j1) {
-      for (int j2 = 0; j2 < NCHILD; ++j2) {
-        ivec3 parentRelCoord = REL_COORD_M2L[i];
-        ivec3 childRelCoord;
-        childRelCoord[0] = 
-            parentRelCoord[0] * 2 - (j1 / 1) % 2 + (j2 / 1) % 2;
-        childRelCoord[1] =
-            parentRelCoord[1] * 2 - (j1 / 2) % 2 + (j2 / 2) % 2;
-        childRelCoord[2] =
-            parentRelCoord[2] * 2 - (j1 / 4) % 2 + (j2 / 4) % 2;
-        int childRelIdx = REL_COORD_M2L_helper.hash(childRelCoord);
-        int j = j2 * NCHILD + j1;
-        M2L_INDEX_MAP[i][j] = childRelIdx;
-      }
-    }
-  }
-}
-
-//! Compute the relative positions for all operators and generate M2L index
-//! mapping.
-void init_rel_coord() {
-  static bool is_initialized = false;
-  if (!is_initialized) {
-    generate_M2L_index_map();
-    is_initialized = true;
-  }
-}
 }  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_GEOMETRY_H_

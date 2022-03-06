@@ -63,7 +63,6 @@ detail::relative_coord_mapping<detail::coords_L2L> REL_COORD_L2L;
 detail::relative_coord_mapping<detail::coords_M2L> REL_COORD_M2L;
 detail::relative_coord_mapping<detail::coords_M2L_helper> REL_COORD_M2L_helper;
 
-std::vector<std::vector<int>>
-    M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
+detail::M2L_idx_map M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
 }  // namespace ExaFMM
 #endif  // INCLUDE_EXAFMM_EXAFMM_H_

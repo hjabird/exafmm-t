@@ -47,8 +47,6 @@ int main(int argc, char **argv) {
   adaptive_tree tree(sources, targets, fmm);
   stop("Build Tree");
 
-  init_rel_coord();
-
   start("Build Lists");
   build_list(tree.nodes(), fmm);
   stop("Build Lists");
