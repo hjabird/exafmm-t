@@ -144,11 +144,11 @@ class Fmm : public p2p_methods<FmmKernel> {
   //! P2P operator.
   void P2P(nodeptrvec_t& leafs) {
     nodeptrvec_t& targets = leafs;
-    //#pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = targets[i];
       nodeptrvec_t& sources = target->P2Plist();
-      for (size_t j = 0; j < sources.size(); j++) {
+#pragma omp parallel for schedule(static)
+      for (int j = 0; j < static_cast<int>(sources.size()); j++) {
         node_t* source = sources[j];
         target->target_potentials() += this->potential_P2P(
             source->source_coords(), source->source_strengths(),
@@ -629,9 +629,10 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<complex_t> hadamard_product(std::vector<size_t>& interactionCountOffset,
                         std::vector<size_t>& interactionOffsetF,
                         std::vector<complex_t>& fftIn,
-      std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>& matrixM2L) {
+      std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>& matrixM2L,
+      size_t fftOutSize) {
     const size_t fftSize = NCHILD * m_numFreq;
-    std::vector<complex_t> fftOut(interactionCountOffset.size() * fftSize, 0);
+    std::vector<complex_t> fftOut(fftOutSize, 0);
     std::vector<complex_t> zeroVec0(fftSize, 0.);
     std::vector<complex_t> zeroVec1(fftSize, 0.);
 
@@ -666,7 +667,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
 
     for (size_t iBlockTargets = 0; iBlockTargets < nBlockTargets; iBlockTargets++) {
-      //#pragma omp parallel for
+#pragma omp parallel for schedule(static)
       for (int k = 0; k < m_numFreq; k++) {
         for (size_t iPos = 0; iPos < nPos; iPos++) {
           size_t iBlockInteractions = iBlockTargets * nPos + iPos;
@@ -718,7 +719,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     ifile.seekg(fSize - m_depth * nPos * mSize, ifile.beg); 
 
     // collect all upward equivalent charges
-    //#pragma omp parallel for collapse(2)
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < nNodes; ++i) {
       for (int j = 0; j < nSurf; ++j) {
           allUpEquiv[i * nSurf + j] = nodes[i].up_equiv()[j];
@@ -733,13 +734,15 @@ class Fmm : public p2p_methods<FmmKernel> {
       }
       std::vector<complex_t> fftIn = fft_up_equiv(
           m_m2lData[l].fft_offset, allUpEquiv);
+      size_t outputFftSize = m_m2lData[l].ifft_offset.size() * m_numFreq * NCHILD;
       std::vector<complex_t> fftOut = hadamard_product(
           m_m2lData[l].interaction_count_offset,
-          m_m2lData[l].interaction_offset_f, fftIn, matrixM2L);
+          m_m2lData[l].interaction_offset_f, fftIn, matrixM2L,
+          outputFftSize);
       ifft_dn_check(m_m2lData[l].ifft_offset, fftOut, allDnEquiv);
     }
     // update all downward check potentials
-    //#pragma omp parallel for collapse(2)
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < nNodes; ++i) {
       for (int j = 0; j < nSurf; ++j) {
         nodes[i].down_equiv()[j] = allDnEquiv[i * nSurf + j];

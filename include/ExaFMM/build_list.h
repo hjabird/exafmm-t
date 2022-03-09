@@ -277,7 +277,7 @@ void build_list(Nodes<typename FmmT::potential_t>& nodes, const FmmT& fmm) {
   using node_t = Node<typename FmmT::potential_t>;
   unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
   unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
-//#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < static_cast<int>(nodes.size()); i++) {
     node_t* node = &nodes[i];
     build_M2L_list(node, nodes, key2id);
