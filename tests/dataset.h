@@ -11,9 +11,10 @@
  ******************************************************************************/
 #ifndef INCLUDE_EXAFMM_DATASET_H_
 #define INCLUDE_EXAFMM_DATASET_H_
-#include <random>
 
-#include "exafmm.h"
+#include <ExaFMM/exafmm.h>
+
+#include <random>
 
 namespace ExaFMM {
 /**

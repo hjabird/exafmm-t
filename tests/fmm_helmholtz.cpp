@@ -8,14 +8,11 @@
  * Modified by HJA Bird
  *
  ******************************************************************************/
-#if NON_ADAPTIVE
-#include "build_non_adaptive_tree.h"
-#else
-#include "ExaFMM/build_tree.h"
-#endif
-#include "ExaFMM/build_list.h"
-#include "ExaFMM/dataset.h"
-#include "ExaFMM/helmholtz.h"
+#include <ExaFMM/build_list.h>
+#include <ExaFMM/build_tree.h>
+#include <ExaFMM/helmholtz.h>
+
+#include "dataset.h"
 
 using namespace ExaFMM;
 

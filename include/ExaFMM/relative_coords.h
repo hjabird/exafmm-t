@@ -16,7 +16,7 @@
 #include <array>
 
 namespace ExaFMM {
-using ivec3 = Eigen::Vector3i ivec3;  //!< Vector of 3 int types
+using ivec3 = Eigen::Vector3i;  //!< Vector of 3 int types
 
 namespace detail {
 
