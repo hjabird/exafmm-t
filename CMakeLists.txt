@@ -32,7 +32,7 @@ if (MSVC)
 	file (GLOB EXAFMM_INCLUDE "include/ExaFMM/*")
 	source_group("ExaFmm_source" FILES ${EXAFMM_INCLUDE})
 	add_custom_target(ExaFmm_source_ SOURCES ${EXAFMM_INCLUDE})
-	link_libraries(tools/natvis/Eigen.natvis)
+	target_include_directories(exafmm INTERFACE tools/natvis/Eigen.natvis)
 endif()
 
 # Create example binaries

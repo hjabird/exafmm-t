@@ -21,7 +21,6 @@
 #include "hilbert.h"
 
 namespace ExaFMM {
-using std::max;
 
 /** Get bounding box of sources and targets.
  *
@@ -73,7 +72,8 @@ class adaptive_tree {
     bodies_t targets_buffer = targets;
     m_nodes = nodevec_t(1);
     m_nodes[0].set_geometry(fmm.m_x0, fmm.m_r0);
-    m_nodes.reserve((sources.size() + targets.size()) * (32 / fmm.m_numCrit + 1));
+    m_nodes.reserve((sources.size() + targets.size()) *
+                    (32 / fmm.m_numCrit + 1));
     build_tree(&sources[0], &sources_buffer[0], 0, sources.size(), &targets[0],
                &targets_buffer[0], 0, targets.size(), &m_nodes[0], fmm);
     int depth = -1;
@@ -99,12 +99,13 @@ class adaptive_tree {
     node->set_index(node - &m_nodes[0]);  // current node's index in nodes
     const size_t numSources = sourcesEnd - sourcesBegin;
     const size_t numTargets = targetsEnd - targetsBegin;
-    const bool isLeaf{numSources <= fmm.m_numCrit && numTargets <= fmm.m_numCrit };
-    node->set_num_sources_and_targets(static_cast<int>(numSources), 
-        static_cast<int>(numTargets), isLeaf);
+    const bool isLeaf{numSources <= fmm.m_numCrit &&
+                      numTargets <= fmm.m_numCrit};
+    node->set_num_sources_and_targets(static_cast<int>(numSources),
+                                      static_cast<int>(numTargets), isLeaf);
     node->set_num_surfs(fmm.m_numSurf);
-    const ivec3 iX =
-        get3DIndex<potential_t>(node->centre(), node->level(), fmm.m_x0, fmm.m_r0);
+    const ivec3 iX = get3DIndex<potential_t>(node->centre(), node->level(),
+                                             fmm.m_x0, fmm.m_r0);
     node->set_key(getKey(iX, node->level()));
 
     if (isLeaf) {
