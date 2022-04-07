@@ -24,10 +24,10 @@ namespace ExaFMM {
 
 /** Get bounding box of sources and targets.
  *
- * @tparam T Target's value type (real or complex).
+ * @tparam PotentialT The potential type used in the problem.
  * @param sources Vector of sources.
  * @param targets Vector of targets.
- * @return A tuple of the box centre and the radius of the bounding box.
+ * @return A tuple: {box centre, radius of the bounding box}.
  */
 template <typename PotentialT>
 auto get_bounds(const std::vector<Body<PotentialT>>& sources,
@@ -49,6 +49,10 @@ auto get_bounds(const std::vector<Body<PotentialT>>& sources,
   return std::make_tuple(x0, r0);
 }
 
+/** Adaptive hierarchical octree class.
+ *
+ * @tparam PotentialT The potential type used in the problem.
+ */
 template <class FmmT>
 class adaptive_tree {
  public:
@@ -67,6 +71,12 @@ class adaptive_tree {
  public:
   adaptive_tree() = delete;
 
+  /** Construct an adaptive tree.
+   *
+   * @param sources The problem's potentials sources.
+   * @param targets The locations to measure the potential.
+   * @param fmm The fast multipole method solver object.
+   **/
   adaptive_tree(bodies_t& sources, bodies_t& targets, FmmT& fmm) {
     bodies_t sources_buffer = sources;
     bodies_t targets_buffer = targets;
@@ -83,10 +93,13 @@ class adaptive_tree {
     fmm.m_depth = depth;
   }
 
+  /// Returns the nodes in the tree.
   nodevec_t& nodes() noexcept { return m_nodes; }
 
+  /// Returns the leaves in the tree.
   nodeptrvec_t& leaves() noexcept { return m_leafs; }
 
+  /// Returns the non-leaves in the tree.
   nodeptrvec_t& nonleaves() noexcept { return m_nonleafs; }
 
   //! Build nodes of tree adaptively using a top-down approach based on

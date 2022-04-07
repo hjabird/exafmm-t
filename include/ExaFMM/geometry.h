@@ -18,7 +18,7 @@
 
 namespace ExaFMM {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
-// exafmm_t.h.
+// exafmm.h and computed in relative_coords.h.
 
 /** Given a box, calculate the coordinates of surface points.
  *
@@ -27,6 +27,7 @@ namespace ExaFMM {
  *   * 12 * (p - 2) equispaced on the edges
  *   * 6 * (p - 2) ^ 2 on remaining surface grid points.
  *
+ * @tparam PotentialT The potential type used in the problem.
  * @param p Order of expansion.
  * @param r0 Half side length of the bounding box (root node).
  * @param level Level of the box.
@@ -34,7 +35,6 @@ namespace ExaFMM {
  * @param alpha Ratio between the side length of surface box and original box.
  *              Use 2.95 for upward check and downward equivalent surface,
  *              use 1.05 for upward equivalent and downward check surface.
- *
  * @return Vector of coordinates of surface points.
  */
 template <typename PotentialT>
@@ -89,10 +89,9 @@ box_surface_coordinates(
  * @tparam PotentialT The potential type used in the problem.
  * @param p Order of expansion.
  * @param r0 Half side length of the bounding box (root node).
- * @param level Level of the box.
+ * @param level Level of the box in the octtree.
  * @param boxCentre Coordinates of the center of the box.
- *
- * @return Vector of coordinates of convolution grid.
+ * @return A coordinate vector containing 8 p^3 coordinates.
  */
 template <typename PotentialT>
 typename potential_traits<PotentialT>::template coord_matrix_t<dynamic>
@@ -124,8 +123,8 @@ convolution_grid(int p, typename potential_traits<PotentialT>::real_t r0,
 
 /** Generate the mapping from surface points to convolution grid used in FFT.
  *
+ * @tparam PotentialT The type of potential for this FMM.
  * @param p Order of expansion.
- *
  * @return A mapping from upward equivalent surface point index to convolution
  * grid index.
  */
@@ -144,12 +143,10 @@ std::vector<int> generate_surf2conv_up(int p) {
   return map;
 }
 
-/**
- * @brief Generate the mapping from surface points to convolution grid used in
- * IFFT.
+/** Generate the mapping from surface points to convolution grid used in IFFT.
  *
+ * @tparam PotentialT The type of potential for this FMM.
  * @param p Order of expansion.
- *
  * @return A mapping from downward check surface point index to convolution grid
  * index.
  */
