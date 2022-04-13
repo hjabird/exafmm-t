@@ -191,8 +191,7 @@ ivec3 get3DIndex(uint64_t i, int level) {
   return iX;
 }
 
-/**
- * @brief Given bounding box and level, get 3D index from 3D coordinates.
+/** Given bounding box and level, get 3D index from 3D coordinates.
  * @tparam T A potential type.
  * @param X 3D coordinates.
  * @param level Level.
@@ -207,16 +206,12 @@ ivec3 get3DIndex(typename potential_traits<T>::coord_t X, int level,
   using coord_t = typename potential_traits<T>::coord_t;
   coord_t Xmin = x0 - r0 * coord_t::Ones();
   typename potential_traits<T>::real_t dx = 2 * r0 / (1 << level);
-  ivec3 iX;
-  for (int d = 0; d < 3; d++) {
-    iX[d] = static_cast<int>(std::floor((X[d] - Xmin[d]) / dx));
-  }
+  ivec3 iX = ((X - Xmin) / dx).array().floor().cast<int>();
   return iX;
 }
 
-/**
- * @brief Given bounding box and level, get 3D coordinates from 3D index.
- *
+/** Given bounding box and level, get 3D coordinates from 3D index.
+ * @tparam T A potential type.
  * @param iX 3D index, an integer triplet.
  * @param level Level.
  * @param x0 Coordinates of the center of the bounding box.
@@ -230,10 +225,7 @@ typename potential_traits<PotentialT>::coord_t getCoordinates(
   using pt = potential_traits<PotentialT>;
   typename pt::coord_t Xmin = x0 - r0;
   typename pt::real_t dx = 2 * r0 / (1 << level);
-  typename pt::coord_t X;
-  for (int d = 0; d < 3; d++) {
-    X[d] = (iX[d] + 0.5) * dx + Xmin[d];
-  }
+  typename pt::coord_t X = (iX + coord_t::Ones() * 0.5) * dx + Xmin;
   return X;
 }
 }  // namespace ExaFMM
