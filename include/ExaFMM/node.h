@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "body.h"
+#include "morton_key.h"
 #include "potential_traits.h"
 
 namespace ExaFMM {
@@ -82,7 +83,7 @@ class Node {
     return orig;
   }
 
-  uint64_t set_key(uint64_t newKey) {
+  uint64_t set_key(morton_key newKey) {
     size_t orig = m_idx;
     m_key = newKey;
     return orig;
@@ -156,7 +157,7 @@ class Node {
   size_t num_targets() { return m_numTargets; }
   bool is_leaf() const { return m_isLeaf; }
   const int level() const { return m_level; }
-  const uint64_t key() const { return m_key; }
+  const morton_key key() const { return m_key; }
   coord_t centre() const { return m_x; }
   Node* parent() const { return m_parent; }
   real_t radius() const { return m_r; }
@@ -188,7 +189,7 @@ class Node {
   int m_numSources;         //!< Number of sources
   coord_t m_x;              //!< Coordinates of the center of the node
   real_t m_r;               //!< Radius of the node
-  uint64_t m_key;           //!< Morton key
+  morton_key m_key;         //!< Morton key
   int m_level;              //!< Level in the octree
   int m_octant;             //!< Octant
   Node* m_parent;           //!< Pointer to parent

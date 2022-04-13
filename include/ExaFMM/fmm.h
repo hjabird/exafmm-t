@@ -872,22 +872,17 @@ class Fmm : public p2p_methods<FmmKernel> {
       std::vector<complex_t> buffer(fftSize, 0);
       std::vector<potential_t> equiv_t(NCHILD * nConv, potential_t(0.));
 
-      potential_t* upEquiv =
-          &allUpEquiv[fftOffset[node_idx]];  // offset ptr of node's 8
-                                             // child's up_equiv in
-                                             // all_up_equiv, size=8*m_numSurf_
-      // offset ptr of node_idx in fftIn vector, size=fftsize
-      complex_t* upEquivF = &fftIn[fftSize * node_idx];
-
       for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          equiv_t[idx + j * nConv] = upEquiv[j * m_numSurf + k];
+          equiv_t[idx + j * nConv] =
+              allUpEquiv[fftOffset[node_idx] + j * m_numSurf + k];
       }
       fftPlan.execute(equiv_t.data(), buffer.data());
       for (int k = 0; k < m_numFreq; k++) {
         for (int j = 0; j < NCHILD; j++) {
-          upEquivF[NCHILD * k + j] = buffer[m_numFreq * j + k];
+          fftIn[fftSize * node_idx + NCHILD * k + j] =
+              buffer[m_numFreq * j + k];
         }
       }
     }

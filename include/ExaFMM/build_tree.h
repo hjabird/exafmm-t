@@ -18,7 +18,7 @@
 
 #include "exafmm.h"
 #include "fmm.h"
-#include "hilbert.h"
+#include "morton_key.h"
 
 namespace ExaFMM {
 
@@ -47,6 +47,16 @@ auto get_bounds(const std::vector<Body<PotentialT>>& sources,
       (x0 - xMin).cwiseAbs().maxCoeff();
   r0 *= 1.00001;
   return std::make_tuple(x0, r0);
+}
+
+/** Obtain the octant of a point about the origin.
+ * @tparam CoordT The type of the point's coordinate.
+ * @param point The point
+ * @return An int in [0,8) for the octant.
+ **/
+template <typename CoordT>
+int point_octant(CoordT point) {
+  return (point[0] > 0) + ((point[1] > 0) << 1) + ((point[2] > 0) << 2);
 }
 
 /** Adaptive hierarchical octree class.
@@ -147,8 +157,8 @@ class adaptive_tree {
     } else {  // !isLeaf
       m_nonleafs.push_back(node);
       // Sort bodies and save in buffer
-      std::vector<int> source_size, source_offsets;
-      std::vector<int> target_size, target_offsets;
+      std::array<int, NCHILD> source_size, source_offsets;
+      std::array<int, NCHILD> target_size, target_offsets;
       sort_bodies(node, sources, sourcesBuffer, sourcesBegin, sourcesEnd,
                   source_size, source_offsets);  // sourcesBuffer is sorted
       sort_bodies(node, targets, targetsBuffer, targetsBegin, targetsEnd,
@@ -181,28 +191,24 @@ class adaptive_tree {
    */
   void sort_bodies(node_t* const node, body_t* const bodies,
                    body_t* const buffer, size_t begin, size_t end,
-                   std::vector<int>& size, std::vector<int>& offsets) {
+                   std::array<int, NCHILD>& size,
+                   std::array<int, NCHILD>& offsets) {
     using vec3 = typename potential_traits<potential_t>::coord_t;
     // Count number of bodies in each octant
-    size.resize(NCHILD, 0);
+    size.fill(0);
     vec3 X = node->centre();
     for (size_t i = begin; i < end; i++) {
       vec3& x = bodies[i].X;
-      int octant = (x[0] > X[0]) + ((x[1] > X[1]) << 1) + ((x[2] > X[2]) << 2);
+      int octant = point_octant(x - X);
       size[octant]++;
     }
-    // Exclusive scan to get offsets
-    offsets.resize(8);
-    size_t offset = begin;
-    for (int i = 0; i < 8; i++) {
-      offsets[i] = static_cast<int>(offset);
-      offset += size[i];
-    }
+    std::exclusive_scan(size.begin(), size.end(), offsets.begin(), begin);
+
     // Sort bodies by octant
-    std::vector<int> counter(offsets);
+    std::array<int, NCHILD> counter(offsets);
     for (size_t i = begin; i < end; i++) {
       vec3& x = bodies[i].X;
-      int octant = (x[0] > X[0]) + ((x[1] > X[1]) << 1) + ((x[2] > X[2]) << 2);
+      int octant = point_octant(x - X);
       buffer[counter[octant]].X = bodies[i].X;
       buffer[counter[octant]].q = bodies[i].q;
       buffer[counter[octant]].ibody = bodies[i].ibody;

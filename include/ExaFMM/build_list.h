@@ -20,7 +20,7 @@
 #include "exafmm.h"
 #include "fmm.h"
 #include "geometry.h"
-#include "hilbert.h"
+#include "morton_key.h"
 
 namespace ExaFMM {
 
@@ -31,8 +31,8 @@ namespace ExaFMM {
  * @return Keys to indices mapping.
  */
 template <typename T>
-std::unordered_map<uint64_t, size_t> get_key2id(const Nodes<T>& nodes) {
-  std::unordered_map<uint64_t, size_t> key2id;
+std::unordered_map<morton_key, size_t> get_key2id(const Nodes<T>& nodes) {
+  std::unordered_map<morton_key, size_t> key2id;
   for (size_t i = 0; i < nodes.size(); ++i) {
     key2id[nodes[i].key()] = nodes[i].index();
   }
@@ -46,10 +46,10 @@ std::unordered_map<uint64_t, size_t> get_key2id(const Nodes<T>& nodes) {
  * @return Set of all leaf keys with level offset.
  */
 template <typename T>
-std::unordered_set<uint64_t> get_leaf_keys(const Nodes<T>& nodes) {
+std::unordered_set<morton_key> get_leaf_keys(const Nodes<T>& nodes) {
   // we cannot use leafs to generate leaf keys, since it does not include
   // empty leaf nodes where ntrgs and nsrcs are 0.
-  std::unordered_set<uint64_t> leaf_keys;
+  std::unordered_set<morton_key> leaf_keys;
   for (size_t i = 0; i < nodes.size(); ++i) {
     if (nodes[i].is_leaf()) {
       leaf_keys.insert(nodes[i].key());
@@ -68,15 +68,15 @@ std::unordered_set<uint64_t> get_leaf_keys(const Nodes<T>& nodes) {
  *
  * @return Hilbert index with level offset.
  */
-uint64_t find_key(const ivec3& iX, int level,
-                  const std::unordered_set<uint64_t>& leaf_keys) {
-  uint64_t orig_key = getKey(iX, level, true);
-  uint64_t curr_key = orig_key;
+morton_key find_key(const ivec3& iX, int level,
+                    const std::unordered_set<morton_key>& leaf_keys) {
+  morton_key orig_key = getKey(iX, level, true);
+  morton_key curr_key = orig_key;
   while (level > 0) {
     if (leaf_keys.find(curr_key) != leaf_keys.end()) {  // if key is leaf
       return curr_key;
     } else {  // else go 1 level up
-      curr_key = getParent(curr_key);
+      curr_key = curr_key.parent();
       level--;
     }
   }
@@ -88,12 +88,12 @@ uint64_t find_key(const ivec3& iX, int level,
  *
  * @param key_a, key_b Hilbert keys with level offset.
  */
-bool is_adjacent(uint64_t key_a, uint64_t key_b) {
-  int level_a = getLevel(key_a);
-  int level_b = getLevel(key_b);
+bool is_adjacent(morton_key key_a, morton_key key_b) {
+  int level_a = key_a.level();
+  int level_b = key_b.level();
   int max_level = std::max(level_a, level_b);
-  ivec3 iX_a = get3DIndex(key_a);
-  ivec3 iX_b = get3DIndex(key_b);
+  ivec3 iX_a = key_a.get_3D_index();
+  ivec3 iX_b = key_b.get_3D_index();
   ivec3 iX_ac = (iX_a * 2 + ivec3{1, 1, 1}) *
                 (1 << (max_level - level_a));  // center coordinates
   ivec3 iX_bc = (iX_b * 2 + ivec3{1, 1, 1}) *
@@ -121,17 +121,17 @@ bool is_adjacent(uint64_t key_a, uint64_t key_b) {
 template <typename FmmT>
 void build_other_list(Node<typename FmmT::potential_t>* node,
                       Nodes<typename FmmT::potential_t>& nodes, const FmmT& fmm,
-                      const std::unordered_set<uint64_t>& leaf_keys,
-                      const std::unordered_map<uint64_t, size_t>& key2id) {
+                      const std::unordered_set<morton_key>& leaf_keys,
+                      const std::unordered_map<morton_key, size_t>& key2id) {
   using node_t = Node<typename FmmT::potential_t>;
   std::set<node_t*> P2P_set, M2P_set, P2L_set;
   node_t* curr = node;
-  if (curr->key() != 0) {
+  if (curr->key()() != 0) {
     node_t* parent = curr->parent();
     ivec3 min_iX = {0, 0, 0};
     ivec3 max_iX = ivec3::Ones(3) * (1 << node->level());
-    ivec3 curr_iX = get3DIndex(curr->key());
-    ivec3 parent_iX = get3DIndex(parent->key());
+    ivec3 curr_iX = curr->key().get_3D_index();
+    ivec3 parent_iX = parent->key().get_3D_index();
     // search in every direction
     for (int i = -2; i < 4; i++) {
       for (int j = -2; j < 4; j++) {
@@ -144,7 +144,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
           if ((direction.array() >= min_iX.array()).all() &&
               (direction.array() < max_iX.array()).all() &&
               direction != curr_iX) {
-            uint64_t res_key = find_key(direction, curr->level(), leaf_keys);
+            morton_key res_key = find_key(direction, curr->level(), leaf_keys);
             bool adj = is_adjacent(res_key, curr->key());
             node_t* res = &nodes[key2id.at(res_key)];
             if (res->level() < curr->level()) {  // when res node is a leaf
@@ -224,14 +224,14 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
  */
 template <typename T>
 void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
-                    const std::unordered_map<uint64_t, size_t>& key2id) {
+                    const std::unordered_map<morton_key, size_t>& key2id) {
   using node_t = Node<T>;
   node->M2Llist().resize(REL_COORD_M2L.size(), nullptr);
   node_t* curr = node;
   ivec3 min_iX = {0, 0, 0};
   ivec3 max_iX = ivec3::Ones(3) * (1 << curr->level());
   if (!node->is_leaf()) {
-    ivec3 curr_iX = get3DIndex(curr->key());
+    ivec3 curr_iX = curr->key().get_3D_index();
     ivec3 col_iX;
     ivec3 rel_coord;
     for (int i = -1; i <= 1; i++) {
@@ -244,7 +244,7 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
             col_iX = curr_iX + rel_coord;
             if ((col_iX.array() >= min_iX.array()).all() &&
                 (col_iX.array() < max_iX.array()).all()) {
-              uint64_t col_key = getKey(col_iX, curr->level(), true);
+              morton_key col_key = getKey(col_iX, curr->level(), true);
               if (key2id.find(col_key) != key2id.end()) {
                 node_t* col = &nodes[key2id.at(col_key)];
                 if (!col->is_leaf()) {
@@ -269,8 +269,8 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
 template <typename FmmT>
 void build_list(Nodes<typename FmmT::potential_t>& nodes, const FmmT& fmm) {
   using node_t = Node<typename FmmT::potential_t>;
-  std::unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
-  std::unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
+  std::unordered_map<morton_key, size_t> key2id = get_key2id(nodes);
+  std::unordered_set<morton_key> leaf_keys = get_leaf_keys(nodes);
 #pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < static_cast<int>(nodes.size()); i++) {
     node_t* node = &nodes[i];
