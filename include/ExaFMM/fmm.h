@@ -63,16 +63,16 @@ class Fmm : public p2p_methods<FmmKernel> {
   using nodevec_t = std::vector<node_t>;
   using nodeptrvec_t = std::vector<node_t*>;
 
-  int m_p;       //!< Order of expansion
-  int m_numSurf;   //!< Number of points on equivalent / check surface
-  int m_numConvPoints;   //!< Number of points on convolution grid
-  int m_numFreq;   //!< Number of coefficients in DFT (depending on whether T is
-               //!< real_t)
-  int m_numCrit;   //!< Max number of bodies per leaf
-  int m_depth;   //!< Depth of the tree
-  real_t m_r0;   //!< Half of the side length of the bounding box
-  coord_t m_x0;  //!< Coordinates of the center of root box
-  bool m_isPrecomputed;   //!< Whether the matrix file is found
+  int m_p;              //!< Order of expansion
+  int m_numSurf;        //!< Number of points on equivalent / check surface
+  int m_numConvPoints;  //!< Number of points on convolution grid
+  int m_numFreq;  //!< Number of coefficients in DFT (depending on whether T is
+                  //!< real_t)
+  int m_numCrit;  //!< Max number of bodies per leaf
+  int m_depth;    //!< Depth of the tree
+  real_t m_r0;    //!< Half of the side length of the bounding box
+  coord_t m_x0;   //!< Coordinates of the center of root box
+  bool m_isPrecomputed;    //!< Whether the matrix file is found
   std::string m_fileName;  //!< File name of the precomputation matrices
 
   Fmm() = delete;
@@ -88,8 +88,9 @@ class Fmm : public p2p_methods<FmmKernel> {
         m_numConvPoints{8 * p * p * p},
         m_numFreq{0},
         m_isPrecomputed{false} {
-        m_numFreq = potential_traits<potential_t>::isComplexPotential ? 
-            m_numConvPoints : 4 * p * p * (p + 1);
+    m_numFreq = potential_traits<potential_t>::isComplexPotential
+                    ? m_numConvPoints
+                    : 4 * p * p * (p + 1);
   }
 
   ~Fmm() = default;
@@ -100,10 +101,12 @@ class Fmm : public p2p_methods<FmmKernel> {
   std::vector<potential_matrix_t<dynamic, dynamic>> matrix_DC2E_U;
   std::vector<potential_matrix_t<dynamic, dynamic>> matrix_DC2E_V;
 
-  std::vector<std::array<
-      potential_matrix_t<dynamic, dynamic>, REL_COORD_M2M.size()>> matrix_M2M;
-  std::vector<std::array<
-      potential_matrix_t<dynamic, dynamic>, REL_COORD_L2L.size()>> matrix_L2L;
+  std::vector<
+      std::array<potential_matrix_t<dynamic, dynamic>, REL_COORD_M2M.size()>>
+      matrix_M2M;
+  std::vector<
+      std::array<potential_matrix_t<dynamic, dynamic>, REL_COORD_L2L.size()>>
+      matrix_L2L;
 
   std::vector<M2LData<real_t>> m_m2lData;
 
@@ -144,10 +147,10 @@ class Fmm : public p2p_methods<FmmKernel> {
   //! P2P operator.
   void P2P(nodeptrvec_t& leafs) {
     nodeptrvec_t& targets = leafs;
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
       node_t* target = targets[i];
       nodeptrvec_t& sources = target->P2Plist();
-#pragma omp parallel for schedule(static)
       for (int j = 0; j < static_cast<int>(sources.size()); j++) {
         node_t* source = sources[j];
         target->target_potentials() += this->potential_P2P(
@@ -196,9 +199,8 @@ class Fmm : public p2p_methods<FmmKernel> {
     dn_check_surf.resize(m_depth + 1);
     for (int level = 0; level <= m_depth; level++) {
       dn_check_surf[level].resize(m_numSurf, 3);
-      dn_check_surf[level] =
-          box_surface_coordinates<potential_t>(
-              m_p, m_r0, level, coord_t::Zero(3), 1.05);
+      dn_check_surf[level] = box_surface_coordinates<potential_t>(
+          m_p, m_r0, level, coord_t::Zero(3), 1.05);
     }
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(targets.size()); i++) {
@@ -331,10 +333,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     matrix_M2M.resize(depth + 1);
     matrix_L2L.resize(depth + 1);
     for (int level = 0; level <= depth; ++level) {
-        std::fill(matrix_M2M[level].begin(), matrix_M2M[level].end(),
-            potential_matrix_t<>(nSurf, nSurf));
-        std::fill(matrix_L2L[level].begin(), matrix_L2L[level].end(),
-            potential_matrix_t<>(nSurf, nSurf));
+      std::fill(matrix_M2M[level].begin(), matrix_M2M[level].end(),
+                potential_matrix_t<>(nSurf, nSurf));
+      std::fill(matrix_L2L[level].begin(), matrix_L2L[level].end(),
+                potential_matrix_t<>(nSurf, nSurf));
     }
   }
 
@@ -351,9 +353,9 @@ class Fmm : public p2p_methods<FmmKernel> {
       for (int i = 0; i < npos; i++) {
         // compute kernel matrix
         ivec3& coord = REL_COORD_M2M[i];
-        coord_t childCoord{ parentCoord };
+        coord_t childCoord{parentCoord};
         for (int d{0}; d < 3; ++d) {
-            childCoord(d) += coord[d] * s;
+          childCoord(d) += coord[d] * s;
         }
         auto child_up_equiv_surf = box_surface_coordinates<potential_t>(
             m_p, m_r0, level + 1, childCoord, 1.05);
@@ -458,10 +460,10 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! P2M operator
   void P2M(nodeptrvec_t& leafs) {
-    std::vector<coord_matrix_t<>> upCheckSurf(
-        m_depth + 1, coord_matrix_t<>(m_numSurf, 3));
+    std::vector<coord_matrix_t<>> upCheckSurf(m_depth + 1,
+                                              coord_matrix_t<>(m_numSurf, 3));
     for (int level = 0; level <= m_depth; level++) {
-        upCheckSurf[level] = box_surface_coordinates<potential_t>(
+      upCheckSurf[level] = box_surface_coordinates<potential_t>(
           m_p, m_r0, level, {0, 0, 0}, 2.95);
     }
 #pragma omp parallel for
@@ -469,7 +471,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       node_t* leaf = leafs[i];
       int level = leaf->level();
       // calculate upward check potential induced by sources' charges
-      coord_matrix_t<> check_coord{ upCheckSurf[level]};
+      coord_matrix_t<> check_coord{upCheckSurf[level]};
       check_coord.rowwise() += leaf->centre();
       leaf->up_equiv() = this->potential_P2P(
           leaf->source_coords(), leaf->source_strengths(), check_coord);
@@ -483,8 +485,8 @@ class Fmm : public p2p_methods<FmmKernel> {
 
   //! L2P operator
   void L2P(nodeptrvec_t& leafs) {
-    std::vector<coord_matrix_t<>> downEquivSurf(
-        m_depth + 1, coord_matrix_t<>(m_numSurf, 3));
+    std::vector<coord_matrix_t<>> downEquivSurf(m_depth + 1,
+                                                coord_matrix_t<>(m_numSurf, 3));
     for (int level = 0; level <= m_depth; level++) {
       downEquivSurf[level] = box_surface_coordinates<potential_t>(
           m_p, m_r0, level, {0, 0, 0}, 2.95);
@@ -552,7 +554,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     const int depth = m_depth;
     int nPos = static_cast<int>(
         REL_COORD_M2L.size());  // number of M2L relative positions
-    m_m2lData.resize(depth);           // initialize m2ldata
+    m_m2lData.resize(depth);    // initialize m2ldata
 
     // construct lists of target nodes for M2L operator at each level
     std::vector<nodeptrvec_t> targetNodes(depth);
@@ -596,8 +598,8 @@ class Fmm : public p2p_methods<FmmKernel> {
             i;  // node_id: node's index in src_nodes list
       }
       size_t nblk_trg = targetNodes[l].size() * sizeof(real_t) / CACHE_SIZE;
-      if (nblk_trg == 0) { 
-          nblk_trg = 1; 
+      if (nblk_trg == 0) {
+        nblk_trg = 1;
       }
       size_t interactionCountOffsetVar = 0;
       size_t fftSize = NCHILD * m_numFreq;
@@ -609,10 +611,9 @@ class Fmm : public p2p_methods<FmmKernel> {
             nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
             if (M2L_list[k]) {
               // src_node's displacement in fftIn:
-              interactionOffsetF.push_back(
-                  M2L_list[k]->indexM2L() * fftSize);  
+              interactionOffsetF.push_back(M2L_list[k]->indexM2L() * fftSize);
               // trg_node's displacement in fftOut:
-              interactionOffsetF.push_back(i * fftSize); 
+              interactionOffsetF.push_back(i * fftSize);
               interactionCountOffsetVar++;
             }
           }
@@ -626,10 +627,11 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  std::vector<complex_t> hadamard_product(std::vector<size_t>& interactionCountOffset,
-                        std::vector<size_t>& interactionOffsetF,
-                        std::vector<complex_t>& fftIn,
-      std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>& matrixM2L,
+  std::vector<complex_t> hadamard_product(
+      std::vector<size_t>& interactionCountOffset,
+      std::vector<size_t>& interactionOffsetF, std::vector<complex_t>& fftIn,
+      std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>&
+          matrixM2L,
       size_t fftOutSize) {
     const size_t fftSize = NCHILD * m_numFreq;
     std::vector<complex_t> fftOut(fftOutSize, 0);
@@ -638,7 +640,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     const size_t nPos = matrixM2L.size();
     // The number of blocks of interactions
-    const size_t nBlockInteractions = interactionCountOffset.size();  
+    const size_t nBlockInteractions = interactionCountOffset.size();
     // The number of blocks based on targetNodes
     size_t nBlockTargets = nBlockInteractions / nPos;
     const size_t blockSize = CACHE_SIZE / sizeof(complex_t);
@@ -646,33 +648,39 @@ class Fmm : public p2p_methods<FmmKernel> {
     std::vector<complex_t*> OUT_(blockSize * nBlockInteractions);
 
 #pragma omp parallel for
-    for (int iBlockInteractions = 0; 
+    for (int iBlockInteractions = 0;
          iBlockInteractions < static_cast<int>(nBlockInteractions);
          iBlockInteractions++) {
       size_t interactionCountOffset0 =
-          (iBlockInteractions == 0 ? 0 : interactionCountOffset[iBlockInteractions - 1]);
-      size_t interactionCountOffset1 = interactionCountOffset[iBlockInteractions];
+          (iBlockInteractions == 0
+               ? 0
+               : interactionCountOffset[iBlockInteractions - 1]);
+      size_t interactionCountOffset1 =
+          interactionCountOffset[iBlockInteractions];
       size_t interactionCount =
           interactionCountOffset1 - interactionCountOffset0;
       for (size_t j = 0; j < interactionCount; j++) {
         IN_[blockSize * iBlockInteractions + j] =
-            fftIn.data() + 
+            fftIn.data() +
             interactionOffsetF[(interactionCountOffset0 + j) * 2 + 0];
         OUT_[blockSize * iBlockInteractions + j] =
-            fftOut.data() + 
+            fftOut.data() +
             interactionOffsetF[(interactionCountOffset0 + j) * 2 + 1];
       }
       IN_[blockSize * iBlockInteractions + interactionCount] = zeroVec0.data();
       OUT_[blockSize * iBlockInteractions + interactionCount] = zeroVec1.data();
     }
 
-    for (size_t iBlockTargets = 0; iBlockTargets < nBlockTargets; iBlockTargets++) {
+    for (size_t iBlockTargets = 0; iBlockTargets < nBlockTargets;
+         iBlockTargets++) {
 #pragma omp parallel for schedule(static)
       for (int k = 0; k < m_numFreq; k++) {
         for (size_t iPos = 0; iPos < nPos; iPos++) {
           size_t iBlockInteractions = iBlockTargets * nPos + iPos;
           size_t interactionCountOffset0 =
-              (iBlockInteractions == 0 ? 0 : interactionCountOffset[iBlockInteractions - 1]);
+              (iBlockInteractions == 0
+                   ? 0
+                   : interactionCountOffset[iBlockInteractions - 1]);
           size_t interactionCountOffset1 =
               interactionCountOffset[iBlockInteractions];
           size_t interactionCount =
@@ -680,7 +688,8 @@ class Fmm : public p2p_methods<FmmKernel> {
           complex_t** IN = &IN_[blockSize * iBlockInteractions];
           complex_t** OUT = &OUT_[blockSize * iBlockInteractions];
           // k-th freq's (row) offset in matrix_M2L:
-          complex_matrix_t<NCHILD, NCHILD, column_major>& M = matrixM2L[iPos][k];
+          complex_matrix_t<NCHILD, NCHILD, column_major>& M =
+              matrixM2L[iPos][k];
           // Matrix vector product {8} = [8,8] * {8} for all interactions:
           for (size_t j = 0; j < interactionCount; j++) {
             using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
@@ -698,15 +707,19 @@ class Fmm : public p2p_methods<FmmKernel> {
   void M2L(nodevec_t& nodes) {
     const int nSurf = m_numSurf;
     size_t nNodes = nodes.size();
-    constexpr size_t nPos = REL_COORD_M2L.size();  // number of relative positions
+    constexpr size_t nPos =
+        REL_COORD_M2L.size();  // number of relative positions
 
     // allocate memory
-    std::vector<potential_t> allUpEquiv(nNodes * nSurf), 
+    std::vector<potential_t> allUpEquiv(nNodes * nSurf),
         allDnEquiv(nNodes * nSurf);
     // matrixM2L[nPos index][frequency index] -> 8*8 matrix.
-    std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>> matrixM2L(
-        nPos, std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>(m_numFreq,
-            complex_matrix_t<NCHILD, NCHILD, column_major>::Zero(NCHILD, NCHILD)));
+    std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>
+        matrixM2L(
+            nPos,
+            std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>(
+                m_numFreq, complex_matrix_t<NCHILD, NCHILD, column_major>::Zero(
+                               NCHILD, NCHILD)));
 
     // Setup ifstream of M2L pre-computation matrix
     std::ifstream ifile(m_fileName, std::ifstream::binary);
@@ -714,16 +727,16 @@ class Fmm : public p2p_methods<FmmKernel> {
     // The size of the M2L matrix cache file:
     size_t fSize = ifile.tellg();
     // The size in bytes for each M2L matrix:
-    size_t mSize = NCHILD * NCHILD * m_numFreq * sizeof(complex_t); 
+    size_t mSize = NCHILD * NCHILD * m_numFreq * sizeof(complex_t);
     // Jump to the start of the M2L matrix section:
-    ifile.seekg(fSize - m_depth * nPos * mSize, ifile.beg); 
+    ifile.seekg(fSize - m_depth * nPos * mSize, ifile.beg);
 
     // collect all upward equivalent charges
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < nNodes; ++i) {
       for (int j = 0; j < nSurf; ++j) {
-          allUpEquiv[i * nSurf + j] = nodes[i].up_equiv()[j];
-          allDnEquiv[i * nSurf + j] = nodes[i].down_equiv()[j];
+        allUpEquiv[i * nSurf + j] = nodes[i].up_equiv()[j];
+        allDnEquiv[i * nSurf + j] = nodes[i].down_equiv()[j];
       }
     }
     // FFT-accelerate M2L
@@ -732,13 +745,13 @@ class Fmm : public p2p_methods<FmmKernel> {
       for (size_t i{0}; i < nPos; ++i) {
         ifile.read(reinterpret_cast<char*>(matrixM2L[i].data()), mSize);
       }
-      std::vector<complex_t> fftIn = fft_up_equiv(
-          m_m2lData[l].fft_offset, allUpEquiv);
-      size_t outputFftSize = m_m2lData[l].ifft_offset.size() * m_numFreq * NCHILD;
+      std::vector<complex_t> fftIn =
+          fft_up_equiv(m_m2lData[l].fft_offset, allUpEquiv);
+      size_t outputFftSize =
+          m_m2lData[l].ifft_offset.size() * m_numFreq * NCHILD;
       std::vector<complex_t> fftOut = hadamard_product(
           m_m2lData[l].interaction_count_offset,
-          m_m2lData[l].interaction_offset_f, fftIn, matrixM2L,
-          outputFftSize);
+          m_m2lData[l].interaction_offset_f, fftIn, matrixM2L, outputFftSize);
       ifft_dn_check(m_m2lData[l].ifft_offset, fftOut, allDnEquiv);
     }
     // update all downward check potentials
@@ -761,12 +774,11 @@ class Fmm : public p2p_methods<FmmKernel> {
     //#pragma omp parallel for
     for (int level = 0; level <= m_depth; ++level) {
       // compute kernel matrix
-      auto upCheckSurf = box_surface_coordinates<potential_t>(
-          m_p, m_r0, level, boxCentre, 2.95);
-      auto upEquivSurf = box_surface_coordinates<potential_t>(
-          m_p, m_r0, level, boxCentre, 1.05);
-      potential_matrix_t<> matrix_c2e =
-          kernel_matrix(upCheckSurf, upEquivSurf);
+      auto upCheckSurf = box_surface_coordinates<potential_t>(m_p, m_r0, level,
+                                                              boxCentre, 2.95);
+      auto upEquivSurf = box_surface_coordinates<potential_t>(m_p, m_r0, level,
+                                                              boxCentre, 1.05);
+      potential_matrix_t<> matrix_c2e = kernel_matrix(upCheckSurf, upEquivSurf);
       Eigen::BDCSVD<potential_matrix_t<>> svd(
           matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
       auto singularDiag = svd.singularValues();
@@ -792,11 +804,13 @@ class Fmm : public p2p_methods<FmmKernel> {
   // ################################################################################
   void precompute_M2L(std::ofstream& file) {
     int fftSize = m_numFreq * NCHILD * NCHILD;
-    std::array<std::vector<complex_t>, REL_COORD_M2L_helper.size()> matrix_M2L_Helper;
+    std::array<std::vector<complex_t>, REL_COORD_M2L_helper.size()>
+        matrix_M2L_Helper;
     std::fill(matrix_M2L_Helper.begin(), matrix_M2L_Helper.end(),
-        std::vector<complex_t>(m_numFreq));
+              std::vector<complex_t>(m_numFreq));
     std::array<std::vector<complex_t>, REL_COORD_M2L.size()> matrix_M2L;
-    std::fill(matrix_M2L.begin(), matrix_M2L.end(), std::vector<complex_t>(fftSize));
+    std::fill(matrix_M2L.begin(), matrix_M2L.end(),
+              std::vector<complex_t>(fftSize));
 
     // create fft plan
     ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
@@ -805,8 +819,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     for (int level = 0; level < m_depth; ++level) {
       // compute M2L kernel matrix, perform DFT
       //#pragma omp parallel for
-      for (int i = 0; i < static_cast<int>(REL_COORD_M2L_helper.size());
-           ++i) {
+      for (int i = 0; i < static_cast<int>(REL_COORD_M2L_helper.size()); ++i) {
         coord_t boxCentre;
         for (int d = 0; d < 3; d++) {
           boxCentre[d] = REL_COORD_M2L_helper[i][d] * m_r0 *
@@ -829,8 +842,8 @@ class Fmm : public p2p_methods<FmmKernel> {
           if (childRelIdx != 123456789) {
             for (int k = 0; k < m_numFreq; k++) {  // loop over frequencies
               int new_idx = k * (NCHILD * NCHILD) + j;
-              matrix_M2L[i][new_idx] =
-                  matrix_M2L_Helper[childRelIdx][k] / complex_t(m_numConvPoints);
+              matrix_M2L[i][new_idx] = matrix_M2L_Helper[childRelIdx][k] /
+                                       complex_t(m_numConvPoints);
             }
           }
         }
@@ -838,21 +851,21 @@ class Fmm : public p2p_methods<FmmKernel> {
       // write to file
       for (auto& vec : matrix_M2L) {
         file.write(reinterpret_cast<char*>(vec.data()),
-            fftSize * sizeof(complex_t));
+                   fftSize * sizeof(complex_t));
       }
     }
   }
 
   std::vector<complex_t> fft_up_equiv(std::vector<size_t>& fftOffset,
-                    std::vector<potential_t>& allUpEquiv) {
+                                      std::vector<potential_t>& allUpEquiv) {
     const int nConv = m_numConvPoints;
     auto map = generate_surf2conv_up<potential_t>(m_p);
 
     size_t fftSize = NCHILD * m_numFreq;
     std::vector<complex_t> fftIn(fftOffset.size() * fftSize);
-    ivec3 dim = ivec3{m_p, m_p, m_p } * 2;
-    fft<potential_t, fft_dir::forwards> fftPlan(
-        3, dim.data(), NCHILD, nConv, m_numFreq);
+    ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
+    fft<potential_t, fft_dir::forwards> fftPlan(3, dim.data(), NCHILD, nConv,
+                                                m_numFreq);
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(fftOffset.size());
          node_idx++) {
@@ -861,9 +874,9 @@ class Fmm : public p2p_methods<FmmKernel> {
 
       potential_t* upEquiv =
           &allUpEquiv[fftOffset[node_idx]];  // offset ptr of node's 8
-                                                // child's up_equiv in
-                                                // all_up_equiv, size=8*m_numSurf_
-       // offset ptr of node_idx in fftIn vector, size=fftsize
+                                             // child's up_equiv in
+                                             // all_up_equiv, size=8*m_numSurf_
+      // offset ptr of node_idx in fftIn vector, size=fftsize
       complex_t* upEquivF = &fftIn[fftSize * node_idx];
 
       for (int k = 0; k < m_numSurf; k++) {
@@ -888,8 +901,8 @@ class Fmm : public p2p_methods<FmmKernel> {
 
     size_t fftSize = NCHILD * m_numFreq;
     ivec3 dim = ivec3{m_p, m_p, m_p} * 2;
-    fft<potential_t, fft_dir::backwards> fftPlan(
-        3, dim.data(), NCHILD, m_numFreq, m_numConvPoints);
+    fft<potential_t, fft_dir::backwards> fftPlan(3, dim.data(), NCHILD,
+                                                 m_numFreq, m_numConvPoints);
 
 #pragma omp parallel for
     for (int node_idx = 0; node_idx < static_cast<int>(ifftOffset.size());
@@ -897,17 +910,18 @@ class Fmm : public p2p_methods<FmmKernel> {
       std::vector<complex_t> fqDomainData(fftSize, 0);
       std::vector<potential_t> tmDomainData(NCHILD * m_numConvPoints, 0);
       potential_t* downEquiv = &allDownEquiv[ifftOffset[node_idx]];
-      for (int k = 0; k < m_numFreq; k++){
+      for (int k = 0; k < m_numFreq; k++) {
         for (int j = 0; j < NCHILD; j++) {
-            fqDomainData[m_numFreq * j + k] = 
-                fftOut[fftSize * node_idx + NCHILD * k + j];
+          fqDomainData[m_numFreq * j + k] =
+              fftOut[fftSize * node_idx + NCHILD * k + j];
         }
       }
       fftPlan.execute(fqDomainData.data(), tmDomainData.data());
       for (int k = 0; k < m_numSurf; k++) {
         size_t idx = map[k];
         for (int j = 0; j < NCHILD; j++)
-          downEquiv[m_numSurf * j + k] += tmDomainData[idx + j * m_numConvPoints];
+          downEquiv[m_numSurf * j + k] +=
+              tmDomainData[idx + j * m_numConvPoints];
       }
     }
   }
