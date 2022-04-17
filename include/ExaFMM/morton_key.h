@@ -18,126 +18,110 @@
 
 namespace ExaFMM {
 
+/** A Morton key. This maps a 3D integer index to linear index using z-ordering.
+ * See constructor for detail.
+ **/
 class morton_key {
  public:
   morton_key() = default;
-  morton_key(uint64_t x) : m_value(x){};
 
+  morton_key(uint64_t x, int level) : m_value{x}, m_level{level} {};
+
+  /** Get Morton key from 3D index of a node.
+   * @param iX 3D index of a node, an integer triplet.
+   * @param level Level of the node.
+   * @param offset Whether to add level offset to the key, default to true.
+   */
+  morton_key(ivec3 iX, int level) : m_value{0}, m_level{level} {
+    for (int l = 0; l < level; l++) {
+      m_value |= (iX[2] & (uint64_t)1 << l) << 2 * l;
+      m_value |= (iX[1] & (uint64_t)1 << l) << (2 * l + 1);
+      m_value |= (iX[0] & (uint64_t)1 << l) << (2 * l + 2);
+    }
+  }
+
+  /// Get a uint64_t representation of this key.
   uint64_t& operator()() { return m_value; }
   const uint64_t& operator()() const { return m_value; }
 
   bool operator==(const morton_key& other) const noexcept {
-    return m_value == other.m_value;
+    return (m_value == other.m_value) && (m_level == other.m_level);
   }
   bool operator!=(const morton_key& other) const noexcept {
-    return m_value != other.m_value;
-  }
-  bool operator>(const morton_key& other) const noexcept {
-    return m_value > other.m_value;
-  }
-  bool operator<(const morton_key& other) const noexcept {
-    return m_value < other.m_value;
+    return (m_value != other.m_value) || (m_level != other.m_level);
   }
 
   /** Get level of this key.
    * @return int Level.
    */
-  inline int level() const {
-    int level = -1;
-    uint64_t offset = 0;
-    while (m_value >= offset) {
-      level++;
-      offset += (uint64_t)1 << 3 * level;
-    }
-    return level;
-  }
+  inline int level() const { return m_level; }
 
-  /** Get parent's Morton key with level offset.
+  /** Get parent's Morton key (level - 1).
    * @return morton_key Parent's Morton key.
    */
   inline morton_key parent() const {
-    int thisLevel = level();
-    return (m_value - level_offset(thisLevel)()) / 8 +
-           level_offset(thisLevel - 1)();
+    return morton_key(m_value / 8, m_level - 1);
   }
 
-  /** Calculate levelwise offset of Morton key.
-   * @param level Level.
-   * @return uint64_t Level offset.
-   */
-  static inline morton_key level_offset(int level) {
-    return (((uint64_t)1 << 3 * level) - 1) / 7;
-  }
-
-  /** Get first child's Morton key with level offset.
+  /** Get first child's Morton key (level + 1).
    * @return morton_key First child's Morton key.
    */
-  morton_key child() const {
-    int thisLevel = level();
-    return (m_value - level_offset(thisLevel)()) * 8 +
-           level_offset(thisLevel + 1)();
+  inline morton_key child() const {
+    return morton_key(m_value * 8, m_level + 1);
   }
 
   /** Determine which octant the key belongs to.
-   * @param offset Whether the key contains level offset, default to true.
    * @return int Octant.
    */
-  int octant(bool offset = true) const {
-    int thisLevel = level();
-    morton_key retVal{m_value};
-    if (offset) {
-      retVal() -= level_offset(thisLevel)();
-    }
-    return retVal() & 7;
-  }
+  inline int octant() const { return m_value & 0x7; }
 
-  /** Get 3D index from a Morton key with level offset.
+  /** Get 3D index from a Morton key.
    * @return ivec3 3D index, an integer triplet.
    */
   ivec3 get_3D_index() const {
-    int thisLevel = level();
-    morton_key tmp{m_value};
-    tmp() -= level_offset(thisLevel)();
-    return tmp.get_3D_index(thisLevel);
-  }
-
-  /** Get 3D index from a Morton key without level offset.
-   * @param level Level.
-   * @return ivec3 3D index, an integer triplet.
-   */
-  ivec3 get_3D_index(int level) const {
     ivec3 iX = {0, 0, 0};
-    morton_key tmp{m_value};
-    for (int l = 0; l < level; l++) {
-      iX[2] |= (tmp() & (uint64_t)1 << 3 * l) >> 2 * l;
-      iX[1] |= (tmp() & (uint64_t)1 << (3 * l + 1)) >> (2 * l + 1);
-      iX[0] |= (tmp() & (uint64_t)1 << (3 * l + 2)) >> (2 * l + 2);
+    for (int i = 0; i < m_level; i++) {
+      // And the relevant bit from m_value, then shift to location in
+      // iX: >> 3*i << i == >> 2*i.
+      iX[2] |= (m_value & (uint64_t)1 << 3 * i) >> 2 * i;
+      iX[1] |= (m_value & (uint64_t)1 << (3 * i + 1)) >> (2 * i + 1);
+      iX[0] |= (m_value & (uint64_t)1 << (3 * i + 2)) >> (2 * i + 2);
     }
     return iX;
   }
 
- protected:
-  uint64_t m_value;
-};
+  /** Check the adjacency of another key to this one.
+   * This and the other key can be of different levels. Adjacentcy is determined
+   * by looking at the radii of the cube in an octree according to the key's
+   * level. If the sum of the key's radii is less than the distance apart, the
+   * keys are adjacent.
+   * @param other Morton keys with level offset.
+   * @return True if adjacent.
+   */
+  inline bool is_adjacent(const morton_key other) const noexcept {
+    int maxLevel = std::max(m_level, other.m_level);
+    ivec3 iX_a = get_3D_index();
+    ivec3 iX_b = other.get_3D_index();
+    ivec3 iX_ac = (iX_a * 2 + ivec3{1, 1, 1}) *
+                  (1 << (maxLevel - m_level));  // center coordinates
+    ivec3 iX_bc = (iX_b * 2 + ivec3{1, 1, 1}) *
+                  (1 << (maxLevel - other.m_level));  // center coordinates
+    ivec3 diff = iX_ac - iX_bc;
+    int maxDiff = -1;  // L-infinity norm of diff
+    diff = diff.array().abs();
+    maxDiff = diff.maxCoeff();
+    int sum_radius =
+        (1 << (maxLevel - m_level)) + (1 << (maxLevel - other.m_level));
+    return (diff[0] <= sum_radius) && (diff[1] <= sum_radius) &&
+           (diff[2] <= sum_radius) && (maxDiff == sum_radius);
+  }
 
-/** Get Morton key from 3D index of a node.
- * @param iX 3D index of a node, an integer triplet.
- * @param level Level of the node.
- * @param offset Whether to add level offset to the key, default to true.
- * @return morton_key Morton key.
- */
-morton_key getKey(ivec3 iX, int level, bool offset = true) {
-  morton_key i = 0;
-  for (int l = 0; l < level; l++) {
-    i() |= (iX[2] & (uint64_t)1 << l) << 2 * l;
-    i() |= (iX[1] & (uint64_t)1 << l) << (2 * l + 1);
-    i() |= (iX[0] & (uint64_t)1 << l) << (2 * l + 2);
-  }
-  if (offset) {
-    i() += i.level_offset(level)();
-  }
-  return i;
-}
+ protected:
+  // The Morton key itself.
+  uint64_t m_value;
+  // The level in the octree the key represents
+  int m_level;
+};
 
 /** Given bounding box and level, get 3D index from 3D coordinates.
  * @tparam T A potential type.

@@ -129,7 +129,7 @@ class adaptive_tree {
     node->set_num_surfs(fmm.m_numSurf);
     const ivec3 iX = get3DIndex<potential_t>(node->centre(), node->level(),
                                              fmm.m_x0, fmm.m_r0);
-    node->set_key(getKey(iX, node->level()));
+    node->set_key(morton_key(iX, node->level()));
 
     if (isLeaf) {
       if (numSources || numTargets) {  // do not add to leafs if a node is empty

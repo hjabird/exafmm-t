@@ -48,7 +48,7 @@ class Node {
         m_numSources{0},
         m_x{0, 0, 0},
         m_r{0},
-        m_key{0},
+        m_key{0, 0},
         m_level{0},
         m_octant{0},
         m_parent{nullptr},

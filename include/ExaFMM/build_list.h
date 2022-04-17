@@ -24,9 +24,7 @@
 
 namespace ExaFMM {
 
-/**
- * @brief Generate the mapping from Hilbert keys to node indices in the tree.
- *
+/** Generate the mapping from Morton keys to node indices in the tree.
  * @param nodes Tree.
  * @return Keys to indices mapping.
  */
@@ -39,9 +37,7 @@ std::unordered_map<morton_key, size_t> get_key2id(const Nodes<T>& nodes) {
   return key2id;
 }
 
-/**
- * @brief Generate the set of keys of all leaf nodes.
- *
+/** Generate the set of keys of all leaf nodes.
  * @param nodes Tree.
  * @return Set of all leaf keys with level offset.
  */
@@ -49,69 +45,38 @@ template <typename T>
 std::unordered_set<morton_key> get_leaf_keys(const Nodes<T>& nodes) {
   // we cannot use leafs to generate leaf keys, since it does not include
   // empty leaf nodes where ntrgs and nsrcs are 0.
-  std::unordered_set<morton_key> leaf_keys;
+  std::unordered_set<morton_key> leafKeys;
   for (size_t i = 0; i < nodes.size(); ++i) {
     if (nodes[i].is_leaf()) {
-      leaf_keys.insert(nodes[i].key());
+      leafKeys.insert(nodes[i].key());
     }
   }
-  return leaf_keys;
+  return leafKeys;
 }
 
-/**
- * @brief Given the 3D index of an octant and its depth, return the key of
+/** Given the 3D index of an octant and its depth, return the key of
  * the leaf that contains the octant. If such leaf does not exist, return the
  * key of the original octant.
- *
  * @param iX Integer index of the octant.
  * @param level The level of the octant.
- *
- * @return Hilbert index with level offset.
+ * @return Morton index with level offset.
  */
 morton_key find_key(const ivec3& iX, int level,
-                    const std::unordered_set<morton_key>& leaf_keys) {
-  morton_key orig_key = getKey(iX, level, true);
-  morton_key curr_key = orig_key;
+                    const std::unordered_set<morton_key>& leafKeys) {
+  morton_key originalKey(iX, level);
+  morton_key currentKey = originalKey;
   while (level > 0) {
-    if (leaf_keys.find(curr_key) != leaf_keys.end()) {  // if key is leaf
-      return curr_key;
+    if (leafKeys.find(currentKey) != leafKeys.end()) {  // if key is leaf
+      return currentKey;
     } else {  // else go 1 level up
-      curr_key = curr_key.parent();
+      currentKey = currentKey.parent();
       level--;
     }
   }
-  return orig_key;
+  return originalKey;
 }
 
-/**
- * @brief Check the adjacency of two nodes.
- *
- * @param key_a, key_b Hilbert keys with level offset.
- */
-bool is_adjacent(morton_key key_a, morton_key key_b) {
-  int level_a = key_a.level();
-  int level_b = key_b.level();
-  int max_level = std::max(level_a, level_b);
-  ivec3 iX_a = key_a.get_3D_index();
-  ivec3 iX_b = key_b.get_3D_index();
-  ivec3 iX_ac = (iX_a * 2 + ivec3{1, 1, 1}) *
-                (1 << (max_level - level_a));  // center coordinates
-  ivec3 iX_bc = (iX_b * 2 + ivec3{1, 1, 1}) *
-                (1 << (max_level - level_b));  // center coordinates
-  ivec3 diff = iX_ac - iX_bc;
-  int max_diff = -1;  // L-infinity norm of diff
-  for (int d = 0; d < 3; ++d) {
-    diff[d] = std::abs(diff[d]);
-    max_diff = std::max(max_diff, diff[d]);
-  }
-  int sum_radius = (1 << (max_level - level_a)) + (1 << (max_level - level_b));
-
-  return (diff[0] <= sum_radius) && (diff[1] <= sum_radius) &&
-         (diff[2] <= sum_radius) && (max_diff == sum_radius);
-}
-
-/**
- * @brief Build lists for P2P, P2L and M2P operators for a given node.
+/** Build lists for P2P, P2L and M2P operators for a given node.
  *
  * @param node Node.
  * @param nodes Tree.
@@ -126,7 +91,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
   using node_t = Node<typename FmmT::potential_t>;
   std::set<node_t*> P2P_set, M2P_set, P2L_set;
   node_t* curr = node;
-  if (curr->key()() != 0) {
+  if (curr->key() != morton_key(0, 0)) {
     node_t* parent = curr->parent();
     ivec3 min_iX = {0, 0, 0};
     ivec3 max_iX = ivec3::Ones(3) * (1 << node->level());
@@ -145,7 +110,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
               (direction.array() < max_iX.array()).all() &&
               direction != curr_iX) {
             morton_key res_key = find_key(direction, curr->level(), leaf_keys);
-            bool adj = is_adjacent(res_key, curr->key());
+            bool adj = res_key.is_adjacent(curr->key());
             node_t* res = &nodes[key2id.at(res_key)];
             if (res->level() < curr->level()) {  // when res node is a leaf
               if (adj) {
@@ -168,7 +133,7 @@ void build_other_list(Node<typename FmmT::potential_t>* node,
                   while (!buffer.empty()) {
                     node_t* temp = buffer.front();
                     buffer.pop();
-                    if (!is_adjacent(temp->key(), curr->key())) {
+                    if (!temp->key().is_adjacent(curr->key())) {
                       if (temp->is_leaf() &&
                           temp->num_sources() <= fmm.m_numSurf) {
                         P2P_set.insert(temp);
@@ -244,7 +209,7 @@ void build_M2L_list(Node<T>* node, Nodes<T>& nodes,
             col_iX = curr_iX + rel_coord;
             if ((col_iX.array() >= min_iX.array()).all() &&
                 (col_iX.array() < max_iX.array()).all()) {
-              morton_key col_key = getKey(col_iX, curr->level(), true);
+              morton_key col_key(col_iX, curr->level());
               if (key2id.find(col_key) != key2id.end()) {
                 node_t* col = &nodes[key2id.at(col_key)];
                 if (!col->is_leaf()) {
