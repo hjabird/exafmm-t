@@ -18,7 +18,7 @@
 
 #include "exafmm.h"
 #include "fmm.h"
-#include "morton_key.h"
+#include "octree_location.h"
 
 namespace ExaFMM {
 
@@ -98,7 +98,7 @@ class adaptive_tree {
                &targets_buffer[0], 0, targets.size(), &m_nodes[0], fmm);
     int depth = -1;
     for (const auto& leaf : m_leafs) {
-      depth = std::max(leaf->level(), depth);
+      depth = std::max(leaf->location().level(), depth);
     }
     fmm.m_depth = depth;
   }
@@ -127,9 +127,9 @@ class adaptive_tree {
     node->set_num_sources_and_targets(static_cast<int>(numSources),
                                       static_cast<int>(numTargets), isLeaf);
     node->set_num_surfs(fmm.m_numSurf);
-    const ivec3 iX = get3DIndex<potential_t>(node->centre(), node->level(),
-                                             fmm.m_x0, fmm.m_r0);
-    node->set_key(morton_key(iX, node->level()));
+    const ivec3 iX = get3DIndex<potential_t>(
+        node->centre(), node->location().level(), fmm.m_x0, fmm.m_r0);
+    node->set_key(octree_location(iX, node->location().level()));
 
     if (isLeaf) {
       if (numSources || numTargets) {  // do not add to leafs if a node is empty

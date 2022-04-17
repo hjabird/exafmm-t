@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "body.h"
-#include "morton_key.h"
+#include "octree_location.h"
 #include "potential_traits.h"
 
 namespace ExaFMM {
@@ -48,9 +48,7 @@ class Node {
         m_numSources{0},
         m_x{0, 0, 0},
         m_r{0},
-        m_key{0, 0},
-        m_level{0},
-        m_octant{0},
+        m_location{0, 0},
         m_parent{nullptr},
         m_sourceCoords{},
         m_targetCoords{},
@@ -67,8 +65,7 @@ class Node {
     assert(m_children[octant] == nullptr);
     m_children[octant] = &child;
     child.m_parent = this;
-    child.m_level = m_level + 1;
-    child.m_octant = static_cast<int>(octant);
+    child.m_location = this->location().child(octant);
     child.m_r = m_r / 2;
     child.m_x = m_x;
     for (int d = 0; d < 3; d++) {
@@ -83,9 +80,9 @@ class Node {
     return orig;
   }
 
-  uint64_t set_key(morton_key newKey) {
+  uint64_t set_key(octree_location newKey) {
     size_t orig = m_idx;
-    m_key = newKey;
+    m_location = newKey;
     return orig;
   }
 
@@ -156,8 +153,7 @@ class Node {
   size_t num_sources() { return m_numSources; }
   size_t num_targets() { return m_numTargets; }
   bool is_leaf() const { return m_isLeaf; }
-  const int level() const { return m_level; }
-  const morton_key key() const { return m_key; }
+  const octree_location location() const { return m_location; }
   coord_t centre() const { return m_x; }
   Node* parent() const { return m_parent; }
   real_t radius() const { return m_r; }
@@ -182,18 +178,16 @@ class Node {
   potential_vector_t& down_equiv() { return m_downEquiv; }
 
  protected:
-  size_t m_idx;             //!< Index in the octree
-  size_t m_idxM2L;          //!< Index in global M2L interaction list
-  bool m_isLeaf;            //!< Whether the node is leaf
-  int m_numTargets;         //!< Number of targets
-  int m_numSources;         //!< Number of sources
-  coord_t m_x;              //!< Coordinates of the center of the node
-  real_t m_r;               //!< Radius of the node
-  morton_key m_key;         //!< Morton key
-  int m_level;              //!< Level in the octree
-  int m_octant;             //!< Octant
-  Node* m_parent;           //!< Pointer to parent
-  nodeptrvec_t m_children;  //!< Vector of pointers to child nodes
+  size_t m_idx;                //!< Index in the octree
+  size_t m_idxM2L;             //!< Index in global M2L interaction list
+  bool m_isLeaf;               //!< Whether the node is leaf
+  int m_numTargets;            //!< Number of targets
+  int m_numSources;            //!< Number of sources
+  coord_t m_x;                 //!< Coordinates of the center of the node
+  real_t m_r;                  //!< Radius of the node
+  octree_location m_location;  //!< Morton key & level.
+  Node* m_parent;              //!< Pointer to parent
+  nodeptrvec_t m_children;     //!< Vector of pointers to child nodes
   nodeptrvec_t
       m_P2Llist;  //!< Vector of pointers to nodes in P2L interaction list
   nodeptrvec_t

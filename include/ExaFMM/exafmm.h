@@ -21,8 +21,8 @@
 
 #include "args.h"
 #include "fft.h"
-#include "morton_key.h"
 #include "node.h"
+#include "octree_location.h"
 #include "potential_traits.h"
 #include "relative_coords.h"
 
@@ -44,8 +44,8 @@ typedef enum {
 } Precompute_Type;
 
 // alias template
-using Keys =
-    std::vector<std::set<morton_key>>;  //!< Vector of Morton keys of each level
+using Keys = std::vector<std::set<octree_location>>;  //!< Vector of Morton keys
+                                                      //!< of each level
 
 //! M2L setup data
 template <typename RealT>

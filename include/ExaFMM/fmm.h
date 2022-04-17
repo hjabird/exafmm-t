@@ -180,7 +180,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       nodeptrvec_t& sources = target->M2Plist();
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        int level = source->level();
+        int level = source->location().level();
         // source node's equiv coord = relative equiv coord + node's center
         coord_matrix_t<> sourceEquivCoords{upEquivSurf[level]};
         sourceEquivCoords.rowwise() += source->centre();
@@ -208,7 +208,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       nodeptrvec_t& sources = {target->P2Llist()};
       for (size_t j = 0; j < sources.size(); j++) {
         node_t* source = sources[j];
-        int level = target->level();
+        int level = target->location().level();
         // target node's check coord = relative check coord + node's center
         coord_matrix_t<> targetCheckCoords(m_numSurf, 3);
         targetCheckCoords = dn_check_surf[level];
@@ -469,7 +469,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
       node_t* leaf = leafs[i];
-      int level = leaf->level();
+      int level = leaf->location().level();
       // calculate upward check potential induced by sources' charges
       coord_matrix_t<> check_coord{upCheckSurf[level]};
       check_coord.rowwise() += leaf->centre();
@@ -494,7 +494,7 @@ class Fmm : public p2p_methods<FmmKernel> {
 #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(leafs.size()); i++) {
       node_t* leaf = leafs[i];
-      int level = leaf->level();
+      int level = leaf->location().level();
       // down check surface potential -> equivalent surface charge
       potential_vector_t<> equiv =
           matrix_DC2E_V[level] * matrix_DC2E_U[level] * leaf->down_equiv();
@@ -521,7 +521,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
     for (int octant = 0; octant < 8; octant++) {
       if (node->has_child(octant)) {
-        int level = node->level();
+        int level = node->location().level();
         potential_vector_t<> buffer =
             matrix_M2M[level][octant] * node->down_equiv();
         node->up_equiv() += buffer;
@@ -536,7 +536,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     for (int octant = 0; octant < 8; octant++) {
       if (node->has_child(octant)) {
         node_t& child = node->child(octant);
-        int level = node->level();
+        int level = node->location().level();
         potential_vector_t<> buffer =
             matrix_L2L[level][octant] * node->down_equiv();
         child.down_equiv() += buffer;
@@ -559,7 +559,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     // construct lists of target nodes for M2L operator at each level
     std::vector<nodeptrvec_t> targetNodes(depth);
     for (size_t i = 0; i < nonleafs.size(); i++) {
-      targetNodes[nonleafs[i]->level()].push_back(nonleafs[i]);
+      targetNodes[nonleafs[i]->location().level()].push_back(nonleafs[i]);
     }
 
     // prepare for m2ldata for each level
