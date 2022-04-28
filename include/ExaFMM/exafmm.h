@@ -28,20 +28,9 @@
 
 namespace ExaFMM {
 
-const int MEM_ALIGN = 64;
-const int CACHE_SIZE = 512;
 const int NCHILD = 8;
 
 static constexpr auto PI = double(3.141592653589793238462643383279502884);
-
-//! Interaction types that need to be pre-computed.
-typedef enum {
-  M2M_Type = 0,
-  L2L_Type = 1,
-  M2L_Helper_Type = 2,
-  M2L_Type = 3,
-  Type_Count = 4
-} Precompute_Type;
 
 // alias template
 using Keys = std::vector<std::set<octree_location>>;  //!< Vector of Morton keys
