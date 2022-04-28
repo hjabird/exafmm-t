@@ -47,6 +47,11 @@ typedef enum {
 using Keys = std::vector<std::set<octree_location>>;  //!< Vector of Morton keys
                                                       //!< of each level
 
+detail::relative_coord_mapping<detail::coords_M2M> REL_COORD_M2M;
+detail::relative_coord_mapping<detail::coords_L2L> REL_COORD_L2L;
+detail::relative_coord_mapping<detail::coords_M2L> REL_COORD_M2L;
+detail::relative_coord_mapping<detail::coords_M2L_helper> REL_COORD_M2L_helper;
+
 //! M2L setup data
 template <typename RealT>
 struct M2LData {
@@ -55,14 +60,10 @@ struct M2LData {
   std::vector<size_t>
       ifft_offset;  // target's first child's dnward_equiv's displacement
   std::vector<RealT> ifft_scale;
-  std::vector<size_t> interaction_offset_f;
-  std::vector<size_t> interaction_count_offset;
+  // Offset pairs of {sourceNodeOffset, TargetNodeOffset}.
+  std::vector<std::pair<size_t, size_t>> interaction_offset_f;
+  std::array<size_t, REL_COORD_M2L.size()> interaction_count_offset;
 };
-
-detail::relative_coord_mapping<detail::coords_M2M> REL_COORD_M2M;
-detail::relative_coord_mapping<detail::coords_L2L> REL_COORD_L2L;
-detail::relative_coord_mapping<detail::coords_M2L> REL_COORD_M2L;
-detail::relative_coord_mapping<detail::coords_M2L_helper> REL_COORD_M2L_helper;
 
 detail::M2L_idx_map
     M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx

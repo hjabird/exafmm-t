@@ -108,6 +108,9 @@ class Fmm : public p2p_methods<FmmKernel> {
       std::array<potential_matrix_t<dynamic, dynamic>, REL_COORD_L2L.size()>>
       matrix_L2L;
 
+  // Data required for moment to local interaction. m_m2lData[octreeLevel] has
+  // M2L data including offsets and interaction counts at the required level in
+  // the octree.
   std::vector<M2LData<real_t>> m_m2lData;
 
  public:
@@ -550,154 +553,122 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  void M2L_setup(nodeptrvec_t& nonleafs) {
+  /** Precomputations for moment to local operator.
+   * Sets m_m2lData.
+   * @param nonleafs A vector of pointers to the non-leafs nodes.
+   **/
+  void m2l_setup(nodeptrvec_t& nonleafs) {
     const int depth = m_depth;
-    int nPos = static_cast<int>(
-        REL_COORD_M2L.size());  // number of M2L relative positions
-    m_m2lData.resize(depth);    // initialize m2ldata
+    int nPos = static_cast<int>(REL_COORD_M2L.size());
+    m_m2lData.resize(depth);
 
-    // construct lists of target nodes for M2L operator at each level
+    // Collect all of the non-leaf nodes on a per-level basis.
     std::vector<nodeptrvec_t> targetNodes(depth);
-    for (size_t i = 0; i < nonleafs.size(); i++) {
-      targetNodes[nonleafs[i]->location().level()].push_back(nonleafs[i]);
+    for (auto& leafPtr : nonleafs) {
+      targetNodes[leafPtr->location().level()].push_back(leafPtr);
     }
 
-    // prepare for m2ldata for each level
+    // prepare for m2lData for each level
     for (int l = 0; l < depth; l++) {
-      // construct M2L source nodes for current level
-      std::set<node_t*> src_nodes_;
-      for (size_t i = 0; i < targetNodes[l].size(); i++) {
-        nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
-        for (int k = 0; k < nPos; k++) {
-          if (M2L_list[k]) src_nodes_.insert(M2L_list[k]);
-        }
-      }
-      nodeptrvec_t src_nodes;
-      auto it = src_nodes_.begin();
-      for (; it != src_nodes_.end(); it++) {
-        src_nodes.push_back(*it);
-      }
-      // prepare the indices of src_nodes & targetNodes in all_up_equiv &
-      // all_dn_equiv
-      std::vector<size_t> fftOffset(
-          src_nodes.size());  // displacement in all_up_equiv
-      std::vector<size_t> ifftOffset(
-          targetNodes[l].size());  // displacement in all_dn_equiv
-      for (size_t i = 0; i < src_nodes.size(); i++) {
-        fftOffset[i] = src_nodes[i]->child(0).index() * m_numSurf;
-      }
-      for (size_t i = 0; i < targetNodes[l].size(); i++) {
-        ifftOffset[i] = targetNodes[l][i]->child(0).index() * m_numSurf;
-      }
-
-      // calculate interaction_offset_f & interaction_count_offset
-      std::vector<size_t> interactionOffsetF;
-      std::vector<size_t> interactionCountOffset;
-      for (size_t i = 0; i < src_nodes.size(); i++) {
-        src_nodes[i]->indexM2L() =
-            i;  // node_id: node's index in src_nodes list
-      }
-      size_t nblk_trg = targetNodes[l].size() * sizeof(real_t) / CACHE_SIZE;
-      if (nblk_trg == 0) {
-        nblk_trg = 1;
-      }
-      size_t interactionCountOffsetVar = 0;
-      size_t fftSize = NCHILD * m_numFreq;
-      for (size_t iblk_trg = 0; iblk_trg < nblk_trg; iblk_trg++) {
-        size_t blk_start = (targetNodes[l].size() * iblk_trg) / nblk_trg;
-        size_t blk_end = (targetNodes[l].size() * (iblk_trg + 1)) / nblk_trg;
-        for (int k = 0; k < nPos; k++) {
-          for (size_t i = blk_start; i < blk_end; i++) {
-            nodeptrvec_t& M2L_list = targetNodes[l][i]->M2Llist();
-            if (M2L_list[k]) {
-              // src_node's displacement in fftIn:
-              interactionOffsetF.push_back(M2L_list[k]->indexM2L() * fftSize);
-              // trg_node's displacement in fftOut:
-              interactionOffsetF.push_back(i * fftSize);
-              interactionCountOffsetVar++;
-            }
-          }
-          interactionCountOffset.push_back(interactionCountOffsetVar);
-        }
-      }
-      m_m2lData[l].fft_offset = fftOffset;
-      m_m2lData[l].ifft_offset = ifftOffset;
-      m_m2lData[l].interaction_offset_f = interactionOffsetF;
-      m_m2lData[l].interaction_count_offset = interactionCountOffset;
+      m_m2lData[l] = m2l_setup(targetNodes[l], l);
     }
   }
 
+  /** Compute moment to local operators for a given level.
+   * @param levelNodes The non-leaf nodes at this level.
+   * @param level The level in the octree.
+   * @return An M2LData for this level.
+   **/
+  M2LData<real_t> m2l_setup(nodeptrvec_t& levelNodes, int level) {
+    const int nPos = static_cast<int>(REL_COORD_M2L.size());
+    const size_t fftSize = NCHILD * m_numFreq;
+    nodeptrvec_t sourceNodes;
+    {  // Add every m2l interaction from levelNodes to the sourceNodeSet.
+      std::set<node_t*> sourceNodeSet;
+      for (auto& node : levelNodes) {
+        nodeptrvec_t& m2lList = node->M2Llist();
+        for (int k = 0; k < nPos; k++) {
+          if (m2lList[k] != nullptr) {
+            sourceNodeSet.insert(m2lList[k]);
+          }
+        }
+      }
+      // Now turn that into a vector.
+      for (auto it = sourceNodeSet.begin(); it != sourceNodeSet.end(); it++) {
+        sourceNodes.push_back(*it);
+      }
+    }
+    // prepare the indices of sourceNodes & levelNodes in all_up_equiv &
+    // all_dn_equiv
+    // displacement in all_up_equiv:
+    std::vector<size_t> fftOffset(sourceNodes.size());
+    for (size_t i = 0; i < sourceNodes.size(); i++) {
+      fftOffset[i] = sourceNodes[i]->child(0).index() * m_numSurf;
+    }
+    // displacement in all_dn_equiv:
+    std::vector<size_t> ifftOffset(levelNodes.size());
+    for (size_t i = 0; i < levelNodes.size(); i++) {
+      ifftOffset[i] = levelNodes[i]->child(0).index() * m_numSurf;
+    }
+
+    // calculate interaction_offset_f & interaction_count_offset
+    std::vector<std::pair<size_t, size_t>> interactionOffsetF;
+    std::array<size_t, nPos> interactionCountOffset;
+    for (size_t i = 0; i < sourceNodes.size(); i++) {
+      // node_id: node's index in sourceNodes list
+      sourceNodes[i]->indexM2L() = i;
+    }
+    size_t interactionCountOffsetVar = 0;
+    for (int k = 0; k < nPos; k++) {
+      for (size_t i{0}; i < levelNodes.size(); i++) {
+        nodeptrvec_t& M2L_list = levelNodes[i]->M2Llist();
+        if (M2L_list[k] != nullptr) {
+          // std::pair{source node's displacement in fftIn, target node's
+          // displacement in fftOut}.
+          interactionOffsetF.push_back(
+              {M2L_list[k]->indexM2L() * fftSize, i * fftSize});
+          interactionCountOffsetVar++;
+        }
+      }
+      interactionCountOffset[k] = interactionCountOffsetVar;
+    }
+    M2LData<real_t> returnData;
+    returnData.fft_offset = fftOffset;
+    returnData.ifft_offset = ifftOffset;
+    returnData.interaction_offset_f = interactionOffsetF;
+    returnData.interaction_count_offset = interactionCountOffset;
+    return returnData;
+  }
+
   std::vector<complex_t> hadamard_product(
-      std::vector<size_t>& interactionCountOffset,
-      std::vector<size_t>& interactionOffsetF, std::vector<complex_t>& fftIn,
+      std::array<size_t, static_cast<int>(REL_COORD_M2L.size())>&
+          interactionCountOffset,
+      std::vector<std::pair<size_t, size_t>>& interactionOffsetF,
+      std::vector<complex_t>& fftIn,
       std::vector<std::vector<complex_matrix_t<NCHILD, NCHILD, column_major>>>&
           matrixM2L,
       size_t fftOutSize) {
     const size_t fftSize = NCHILD * m_numFreq;
     std::vector<complex_t> fftOut(fftOutSize, 0);
-    std::vector<complex_t> zeroVec0(fftSize, 0.);
-    std::vector<complex_t> zeroVec1(fftSize, 0.);
 
-    const size_t nPos = matrixM2L.size();
-    // The number of blocks of interactions
-    const size_t nBlockInteractions = interactionCountOffset.size();
-    // The number of blocks based on targetNodes
-    size_t nBlockTargets = nBlockInteractions / nPos;
-    const size_t blockSize = CACHE_SIZE / sizeof(complex_t);
-    std::vector<complex_t*> IN_(blockSize * nBlockInteractions);
-    std::vector<complex_t*> OUT_(blockSize * nBlockInteractions);
-
-#pragma omp parallel for
-    for (int iBlockInteractions = 0;
-         iBlockInteractions < static_cast<int>(nBlockInteractions);
-         iBlockInteractions++) {
-      size_t interactionCountOffset0 =
-          (iBlockInteractions == 0
-               ? 0
-               : interactionCountOffset[iBlockInteractions - 1]);
-      size_t interactionCountOffset1 =
-          interactionCountOffset[iBlockInteractions];
-      size_t interactionCount =
-          interactionCountOffset1 - interactionCountOffset0;
-      for (size_t j = 0; j < interactionCount; j++) {
-        IN_[blockSize * iBlockInteractions + j] =
-            fftIn.data() +
-            interactionOffsetF[(interactionCountOffset0 + j) * 2 + 0];
-        OUT_[blockSize * iBlockInteractions + j] =
-            fftOut.data() +
-            interactionOffsetF[(interactionCountOffset0 + j) * 2 + 1];
-      }
-      IN_[blockSize * iBlockInteractions + interactionCount] = zeroVec0.data();
-      OUT_[blockSize * iBlockInteractions + interactionCount] = zeroVec1.data();
-    }
-
-    for (size_t iBlockTargets = 0; iBlockTargets < nBlockTargets;
-         iBlockTargets++) {
 #pragma omp parallel for schedule(static)
-      for (int k = 0; k < m_numFreq; k++) {
-        for (size_t iPos = 0; iPos < nPos; iPos++) {
-          size_t iBlockInteractions = iBlockTargets * nPos + iPos;
-          size_t interactionCountOffset0 =
-              (iBlockInteractions == 0
-                   ? 0
-                   : interactionCountOffset[iBlockInteractions - 1]);
-          size_t interactionCountOffset1 =
-              interactionCountOffset[iBlockInteractions];
-          size_t interactionCount =
-              interactionCountOffset1 - interactionCountOffset0;
-          complex_t** IN = &IN_[blockSize * iBlockInteractions];
-          complex_t** OUT = &OUT_[blockSize * iBlockInteractions];
-          // k-th freq's (row) offset in matrix_M2L:
-          complex_matrix_t<NCHILD, NCHILD, column_major>& M =
-              matrixM2L[iPos][k];
-          // Matrix vector product {8} = [8,8] * {8} for all interactions:
-          for (size_t j = 0; j < interactionCount; j++) {
-            using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
-            using l_mapped_vector_t = Eigen::Map<l_vector_t>;
-            auto in = l_mapped_vector_t(IN[j] + k * NCHILD);
-            auto out = l_mapped_vector_t(OUT[j] + k * NCHILD);
-            out += M * in;
-          }
+    for (int k = 0; k < m_numFreq; k++) {
+      for (size_t iPos = 0; iPos < interactionCountOffset.size(); iPos++) {
+        // k-th freq's (row) offset in matrix_M2L:
+        complex_matrix_t<NCHILD, NCHILD, column_major>& M = matrixM2L[iPos][k];
+        size_t interactionCountOffset0 =
+            (iPos == 0 ? 0 : interactionCountOffset[iPos - 1]);
+        size_t interactionCountOffset1 = interactionCountOffset[iPos];
+        // Matrix vector product {8} = [8,8] * {8} for all interactions:
+        for (size_t j = interactionCountOffset0; j < interactionCountOffset1;
+             j++) {
+          using l_vector_t = Eigen::Matrix<complex_t, 8, 1>;
+          using l_mapped_vector_t = Eigen::Map<l_vector_t>;
+          auto in = l_mapped_vector_t(fftIn.data() +
+                                      interactionOffsetF[j].first + k * NCHILD);
+          auto out = l_mapped_vector_t(
+              fftOut.data() + interactionOffsetF[j].second + k * NCHILD);
+          out += M * in;
         }
       }
     }
@@ -801,7 +772,6 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  // ################################################################################
   void precompute_M2L(std::ofstream& file) {
     int fftSize = m_numFreq * NCHILD * NCHILD;
     std::array<std::vector<complex_t>, REL_COORD_M2L_helper.size()>
