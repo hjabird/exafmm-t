@@ -12,6 +12,7 @@
 #include <ExaFMM/build_tree.h>
 #include <ExaFMM/laplace.h>
 
+#include "args.h"
 #include "dataset.h"
 
 using namespace ExaFMM;

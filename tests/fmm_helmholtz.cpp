@@ -12,6 +12,7 @@
 #include <ExaFMM/build_tree.h>
 #include <ExaFMM/helmholtz.h>
 
+#include "args.h"
 #include "dataset.h"
 
 using namespace ExaFMM;
@@ -54,7 +55,7 @@ int main(int argc, char** argv) {
   stop("Precomputation");
 
   start("M2L Setup");
-  fmm.M2L_setup(tree.nonleaves());
+  fmm.m2l_setup(tree.nonleaves());
   stop("M2L Setup");
   fmm.upward_pass(tree.nodes(), tree.leaves());
   fmm.downward_pass(tree.nodes(), tree.leaves());
