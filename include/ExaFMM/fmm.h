@@ -91,10 +91,8 @@ class Fmm : public p2p_methods<FmmKernel> {
   ~Fmm() = default;
 
  protected:
-  std::vector<potential_matrix_t<dynamic, dynamic>> m_matUC2E_U;
-  std::vector<potential_matrix_t<dynamic, dynamic>> m_matUC2E_V;
-  std::vector<potential_matrix_t<dynamic, dynamic>> m_matDC2E_U;
-  std::vector<potential_matrix_t<dynamic, dynamic>> m_matDC2E_V;
+  std::vector<potential_matrix_t<dynamic, dynamic>> m_matUC2E;
+  std::vector<potential_matrix_t<dynamic, dynamic>> m_matDC2E;
 
   std::vector<
       std::array<potential_matrix_t<dynamic, dynamic>, REL_COORD_M2M.size()>>
@@ -329,10 +327,8 @@ class Fmm : public p2p_methods<FmmKernel> {
   void initialize_matrix() {
     const int nSurf = m_numSurf;
     int depth = m_depth;
-    m_matUC2E_V.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
-    m_matUC2E_U.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
-    m_matDC2E_V.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
-    m_matDC2E_U.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    m_matUC2E.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
+    m_matDC2E.resize(depth + 1, potential_matrix_t<>(nSurf, nSurf));
     m_matM2M.resize(depth + 1);
     m_matL2L.resize(depth + 1);
     for (int level = 0; level <= depth; ++level) {
@@ -358,10 +354,8 @@ class Fmm : public p2p_methods<FmmKernel> {
             m_p, m_r0, level + 1, childCoord, 1.05);
         potential_matrix_t<> matrix_pc2ce =
             kernel_matrix(parent_up_check_surf, child_up_equiv_surf);
-        m_matM2M[level][i] =
-            m_matUC2E_V[level] * m_matUC2E_U[level] * matrix_pc2ce;
-        m_matL2L[level][i] =
-            matrix_pc2ce.transpose() * m_matDC2E_V[level] * m_matDC2E_U[level];
+        m_matM2M[level][i] = m_matUC2E[level] * matrix_pc2ce;
+        m_matL2L[level][i] = matrix_pc2ce.transpose() * m_matDC2E[level];
       }
     }
   }
@@ -392,7 +386,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       leaf->up_equiv() = this->potential_P2P(
           leaf->source_coords(), leaf->source_strengths(), check_coord);
       Eigen::Matrix<potential_t, Eigen::Dynamic, 1> equiv =
-          m_matUC2E_V[level] * m_matUC2E_U[level] * leaf->up_equiv();
+          m_matUC2E[level] * leaf->up_equiv();
       for (int k = 0; k < m_numSurf; k++) {
         leaf->up_equiv()[k] = equiv[k];
       }
@@ -412,8 +406,7 @@ class Fmm : public p2p_methods<FmmKernel> {
       node_t* leaf = leafs[i];
       int level = leaf->location().level();
       // down check surface potential -> equivalent surface charge
-      potential_vector_t<> equiv =
-          m_matDC2E_V[level] * m_matDC2E_U[level] * leaf->down_equiv();
+      potential_vector_t<> equiv = m_matDC2E[level] * leaf->down_equiv();
       leaf->down_equiv() = equiv;
       // equivalent surface charge -> target potential
       coord_matrix_t<> equiv_coord(downEquivSurf[level]);
@@ -670,10 +663,8 @@ class Fmm : public p2p_methods<FmmKernel> {
                               : 0.0;
       }
       auto S_inv = singularDiag.asDiagonal();
-      m_matUC2E_U[level] = U.adjoint();
-      m_matUC2E_V[level] = V * S_inv;
-      m_matDC2E_U[level] = V.transpose();
-      m_matDC2E_V[level] = U.conjugate() * S_inv;
+      m_matUC2E[level] = V * S_inv * U.adjoint();
+      m_matDC2E[level] = U.conjugate() * S_inv * V.transpose();
     }
   }
 
