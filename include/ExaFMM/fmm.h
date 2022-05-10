@@ -91,7 +91,11 @@ class Fmm : public p2p_methods<FmmKernel> {
   ~Fmm() = default;
 
  protected:
+  // Matrices for upwards check surface (& potentials) to upwards equivalent
+  // surface (& densities).
   std::vector<potential_matrix_t<dynamic, dynamic>> m_matUC2E;
+  // Matrices for downwards check surface (& potentials) to downards equivalent
+  // surface (& densities).
   std::vector<potential_matrix_t<dynamic, dynamic>> m_matDC2E;
 
   std::vector<
@@ -198,7 +202,9 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  //! P2L operator.
+  /** Particle to local operator.
+   * @param nodes A vector of nodes to apply this operator to.
+   **/
   void operator_P2L(nodevec_t& nodes) {
     nodevec_t& targets = nodes;
     std::vector<coord_matrix_t<>> dn_check_surf;
@@ -322,8 +328,7 @@ class Fmm : public p2p_methods<FmmKernel> {
     return err;
   }
 
-  /** Initialize precomputation matrices.
-   **/
+  /// Allocate memory for precomputed matrices.
   void initialize_matrix() {
     const int nSurf = m_numSurf;
     int depth = m_depth;
@@ -339,7 +344,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  //! Precompute M2M and L2L
+  /** Precompute M2M and L2L matrices.
+   * @note Requires that the matrices for computing equivalent source densities
+   * from check potentials are precomputed. (matrices UC2E and DC2E).
+   **/
   void precompute_M2M_L2L() {
     for (int level = 0; level <= m_depth; level++) {
       auto parent_up_check_surf = box_surface_coordinates<potential_t>(
@@ -352,15 +360,17 @@ class Fmm : public p2p_methods<FmmKernel> {
         coord_t childCoord(coord.cast<real_t>() * s);
         auto child_up_equiv_surf = box_surface_coordinates<potential_t>(
             m_p, m_r0, level + 1, childCoord, 1.05);
+        // Parent upwards check surface to child upwards equivalent surface.
+        // Downwards check to downwards equivalent is transpose of this.
         potential_matrix_t<> matrix_pc2ce =
             kernel_matrix(parent_up_check_surf, child_up_equiv_surf);
         m_matM2M[level][i] = m_matUC2E[level] * matrix_pc2ce;
-        m_matL2L[level][i] = matrix_pc2ce.transpose() * m_matDC2E[level];
+        m_matL2L[level][i] = m_matDC2E[level] * matrix_pc2ce.transpose();
       }
     }
   }
 
-  //! Precompute
+  /// Precompute operator matrices.
   void precompute() {
     initialize_matrix();
     precompute_check2equiv();
@@ -368,7 +378,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     precompute_M2L();
   }
 
-  //! P2M operator
+  /** Particle to multiple operator. Computes the equivalent source strengths of
+   * a octree cell from the particles contained within it.
+   * @param leafs A collection of leaf nodes to apply this operator to.
+   **/
   void operator_P2M(nodeptrvec_t& leafs) {
     std::vector<coord_matrix_t<>> upCheckSurf(m_depth + 1,
                                               coord_matrix_t<>(m_numSurf, 3));
@@ -393,7 +406,9 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  //! L2P operator
+  /** Local to target operator.
+   * @param leafs A collection of leaf nodes to apply this operator to.
+   **/
   void operator_L2P(nodeptrvec_t& leafs) {
     std::vector<coord_matrix_t<>> downEquivSurf(m_depth + 1,
                                                 coord_matrix_t<>(m_numSurf, 3));
@@ -634,9 +649,10 @@ class Fmm : public p2p_methods<FmmKernel> {
     }
   }
 
-  /** Precompute UC2E and DC2E matrices.
-   * @note See Fong and Darve, Black-box fast multipole method 2009 for relevent
-   * literature.
+  /** Precompute upwards check to equiv (UC2E) and downwads check to equiv
+   * (DC2E) matrices.
+   * @Note See Ying et al. sec. 3.2.1. SVD is used here instead of of Tikhonov
+   * regularization.
    **/
   void precompute_check2equiv() {
     coord_t boxCentre = coord_t::Zero(3);
@@ -647,13 +663,15 @@ class Fmm : public p2p_methods<FmmKernel> {
                                                               boxCentre, 2.95);
       auto upEquivSurf = box_surface_coordinates<potential_t>(m_p, m_r0, level,
                                                               boxCentre, 1.05);
+      // Upwards check surface to upwards equiv surface matrix. The down check
+      // surf to down equiv matrix is the transpose of this.
       potential_matrix_t<> matrix_c2e = kernel_matrix(upCheckSurf, upEquivSurf);
       Eigen::BDCSVD<potential_matrix_t<>> svd(
           matrix_c2e, Eigen::ComputeFullU | Eigen::ComputeFullV);
       auto singularDiag = svd.singularValues();
       auto U = svd.matrixU();
       auto V = svd.matrixV();
-      // pseudo-inverse, removing negligible terms.
+      // Pseudo-inverse of singular values matrix, removing negligible terms.
       real_t max_S = std::reduce(
           singularDiag.data(), singularDiag.data() + singularDiag.size(), 0.,
           [](auto a1, auto a2) { return std::max(a1, a2); });
@@ -663,11 +681,15 @@ class Fmm : public p2p_methods<FmmKernel> {
                               : 0.0;
       }
       auto S_inv = singularDiag.asDiagonal();
+      // The psuedo-inverse of matrix_c2e. Upwards check to equivalent.
       m_matUC2E[level] = V * S_inv * U.adjoint();
+      // Downwards check to downwards equivalent.
       m_matDC2E[level] = U.conjugate() * S_inv * V.transpose();
     }
   }
 
+  /** Precompute M2L matrices.
+   **/
   void precompute_M2L() {
     int fftSize = m_numFreq * NCHILD * NCHILD;
     std::array<std::vector<complex_t>, REL_COORD_M2L_helper.size()>
