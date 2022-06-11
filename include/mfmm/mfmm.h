@@ -1,16 +1,17 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_EXAFMM_H_
-#define INCLUDE_EXAFMM_EXAFMM_H_
+#ifndef INCLUDE_MFMM_MFMM_H_
+#define INCLUDE_MFMM_MFMM_H_
 
 #include <omp.h>
 
@@ -25,7 +26,7 @@
 #include "potential_traits.h"
 #include "relative_coords.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 const int NCHILD = 8;
 
@@ -58,5 +59,5 @@ struct M2LData {
 //// [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
 detail::M2L_idx_map M2L_INDEX_MAP;
 
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_EXAFMM_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_MFMM_H_

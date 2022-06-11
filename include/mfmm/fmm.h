@@ -1,16 +1,17 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_FMM_H_
-#define INCLUDE_EXAFMM_FMM_H_
+#ifndef INCLUDE_MFMM_FMM_H_
+#define INCLUDE_MFMM_FMM_H_
 
 #include <fftw3.h>
 
@@ -20,12 +21,12 @@
 #include <fstream>
 #include <numeric>
 
-#include "exafmm.h"
 #include "geometry.h"
+#include "mfmm.h"
 #include "p2p_methods.h"
 #include "timer.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 //! Base FMM class
 template <class FmmKernel>
@@ -804,6 +805,6 @@ class Fmm : public p2p_methods<FmmKernel> {
   }
 };
 
-}  // namespace ExaFMM
+}  // namespace mfmm
 
-#endif  // INCLUDE_EXAFMM_FMM_H_
+#endif  // INCLUDE_MFMM_FMM_H_

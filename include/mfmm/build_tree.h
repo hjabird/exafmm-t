@@ -1,26 +1,27 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_BUILDTREE_H_
-#define INCLUDE_EXAFMM_BUILDTREE_H_
+#ifndef INCLUDE_MFMM_BUILDTREE_H_
+#define INCLUDE_MFMM_BUILDTREE_H_
 #include <cassert>
 #include <queue>
 #include <tuple>
 #include <unordered_map>
 
-#include "exafmm.h"
 #include "fmm.h"
+#include "mfmm.h"
 #include "octree_location.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 /** Get bounding box of sources and targets.
  *
@@ -217,5 +218,5 @@ class adaptive_tree {
   }
 };
 
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_BUILDTREE_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_BUILDTREE_H_

@@ -1,21 +1,22 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_RELATIVE_COORDS_H_
-#define INCLUDE_EXAFMM_RELATIVE_COORDS_H_
+#ifndef INCLUDE_MFMM_RELATIVE_COORDS_H_
+#define INCLUDE_MFMM_RELATIVE_COORDS_H_
 
 #include <Eigen/Dense>
 #include <array>
 
-namespace ExaFMM {
+namespace mfmm {
 using ivec3 = Eigen::Vector3i;  //!< Vector of 3 int types
 
 namespace detail {
@@ -286,6 +287,6 @@ class M2L_idx_map {
 };
 
 }  // namespace detail
-}  // namespace ExaFMM
+}  // namespace mfmm
 
-#endif  // INCLUDE_EXAFMM_RELATIVE_COORDS_H_
+#endif  // INCLUDE_MFMM_RELATIVE_COORDS_H_

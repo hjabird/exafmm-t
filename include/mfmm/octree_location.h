@@ -1,22 +1,23 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_MORTON_H_
-#define INCLUDE_EXAFMM_MORTON_H_
+#ifndef INCLUDE_MFMM_MORTON_H_
+#define INCLUDE_MFMM_MORTON_H_
 #include <stdint.h>
 
 #include "potential_traits.h"
 #include "relative_coords.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 /** Representation of a location in an octree including octree level and Morton
  * key. This maps a 3D integer index to linear index using z-ordering.
@@ -161,15 +162,15 @@ typename potential_traits<PotentialT>::coord_t getCoordinates(
   typename pt::coord_t X = (iX + coord_t::Ones() * 0.5) * dx + Xmin;
   return X;
 }
-}  // namespace ExaFMM
+}  // namespace mfmm
 
 namespace std {
 template <>
-struct hash<ExaFMM::octree_location> {
-  std::size_t operator()(const ExaFMM::octree_location& k) const {
+struct hash<mfmm::octree_location> {
+  std::size_t operator()(const mfmm::octree_location& k) const {
     return std::hash<uint64_t>()(k.key()) ^ std::hash<int>()(k.level());
   }
 };
 }  // namespace std
 
-#endif  // INCLUDE_EXAFMM_MORTON_H_
+#endif  // INCLUDE_MFMM_MORTON_H_

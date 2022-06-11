@@ -1,22 +1,23 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_DATASET_H_
-#define INCLUDE_EXAFMM_DATASET_H_
+#ifndef INCLUDE_MFMM_DATASET_H_
+#define INCLUDE_MFMM_DATASET_H_
 
-#include <ExaFMM/exafmm.h>
+#include <mfmm/mfmm.h>
 
 #include <random>
 
-namespace ExaFMM {
+namespace mfmm {
 /**
  * @brief Generate uniform distribution in a cube from 0 to 1.
  *
@@ -161,5 +162,5 @@ Bodies<T> init_sources(int numBodies, const char* distribution, int seed) {
   return bodies;
 }
 
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_DATASET_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_DATASET_H_

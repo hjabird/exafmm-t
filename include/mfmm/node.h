@@ -1,16 +1,17 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_NODE_H_
-#define INCLUDE_EXAFMM_NODE_H_
+#ifndef INCLUDE_MFMM_NODE_H_
+#define INCLUDE_MFMM_NODE_H_
 
 #include <vector>
 
@@ -18,7 +19,7 @@
 #include "octree_location.h"
 #include "potential_traits.h"
 
-namespace ExaFMM {
+namespace mfmm {
 /** Structure of nodes.
  *
  * @tparam Value type of sources and targets (real or complex).
@@ -219,6 +220,6 @@ using Nodes = std::vector<Node<T>>;  //!< Vector of nodes
 
 template <typename T>
 using NodePtrs = std::vector<Node<T>*>;  //!< Vector of Node pointers
-}  // namespace ExaFMM
+}  // namespace mfmm
 
-#endif  // INCLUDE_EXAFMM_NODE_H_
+#endif  // INCLUDE_MFMM_NODE_H_

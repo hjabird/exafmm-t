@@ -1,22 +1,23 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_GEOMETRY_H_
-#define INCLUDE_EXAFMM_GEOMETRY_H_
+#ifndef INCLUDE_MFMM_GEOMETRY_H_
+#define INCLUDE_MFMM_GEOMETRY_H_
 
-#include "exafmm.h"
+#include "mfmm.h"
 #include "predefines.h"
 #include "relative_coords.h"
 
-namespace ExaFMM {
+namespace mfmm {
 // Global variables REL_COORD, HASH_LUT, M2L_INDEX_MAP are now defined in
 // exafmm.h and computed in relative_coords.h.
 
@@ -169,5 +170,5 @@ std::vector<int> generate_surf2conv_dn(int p) {
   return map;
 }
 
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_GEOMETRY_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_GEOMETRY_H_

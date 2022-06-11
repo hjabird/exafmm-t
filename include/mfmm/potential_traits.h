@@ -1,22 +1,23 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_POTENTIAL_TRAITS_H_
-#define INCLUDE_EXAFMM_POTENTIAL_TRAITS_H_
+#ifndef INCLUDE_MFMM_POTENTIAL_TRAITS_H_
+#define INCLUDE_MFMM_POTENTIAL_TRAITS_H_
 
 #include <Eigen/Dense>
 #include <complex>
 #include <type_traits>
 
-namespace ExaFMM {
+namespace mfmm {
 
 /// Use row-major memory order. Like C.
 constexpr int row_major = Eigen::RowMajor;
@@ -100,6 +101,6 @@ struct potential_traits {
   template <int Rows = dynamic, int RowOrder = column_major>
   using coord_matrix_t = Eigen::Matrix<real_t, Rows, 3, RowOrder>;
 };
-}  // namespace ExaFMM
+}  // namespace mfmm
 
-#endif  // INCLUDE_EXAFMM_POTENTIAL_TRAITS_H_
+#endif  // INCLUDE_MFMM_POTENTIAL_TRAITS_H_

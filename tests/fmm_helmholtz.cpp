@@ -1,21 +1,22 @@
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#include <ExaFMM/build_list.h>
-#include <ExaFMM/build_tree.h>
-#include <ExaFMM/helmholtz.h>
+#include <mfmm/build_list.h>
+#include <mfmm/build_tree.h>
+#include <mfmm/helmholtz.h>
 
 #include "args.h"
 #include "dataset.h"
 
-using namespace ExaFMM;
+using namespace mfmm;
 
 int main(int argc, char** argv) {
   Args args(argc, argv);

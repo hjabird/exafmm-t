@@ -1,22 +1,23 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_BODY_H_
-#define INCLUDE_EXAFMM_BODY_H_
+#ifndef INCLUDE_MFMM_BODY_H_
+#define INCLUDE_MFMM_BODY_H_
 
 #include <vector>
 
 #include "potential_traits.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 /**
  * @brief Structure of bodies.
@@ -34,6 +35,6 @@ struct Body {
 
 template <typename PotentialT>
 using Bodies = std::vector<Body<PotentialT>>;  //!< Vector of nodes
-}  // namespace ExaFMM
+}  // namespace mfmm
 
-#endif  // INCLUDE_EXAFMM_BODY_H_
+#endif  // INCLUDE_MFMM_BODY_H_

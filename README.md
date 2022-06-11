@@ -1,4 +1,4 @@
-# A fork of ExaFMM-t
+# A fork of ExaFMM-T
 
 This is fork of the ExaFMM-t project and very much a work in progress. So what are the big changes so far? The good:
 * Improved comments and code clarity.
@@ -33,13 +33,13 @@ To do:
   * SYCL-2020 (for this, the codebase must stay as C++2017).
 * Non-particle sources.
 
-## What was ExaFMM-t
+## What was exafmm-t
 
-The original ExaFMM-t is available [here](https://github.com/exafmm/exafmm-t) and no longer appears to be actively developed.
+The original exafmm-t is available [here](https://github.com/exafmm/exafmm-t) and no longer appears to be actively developed.
 
 [![status](https://joss.theoj.org/papers/0faabca7e0ef645b42d7dd72cc924ecc/status.svg)](https://joss.theoj.org/papers/0faabca7e0ef645b42d7dd72cc924ecc)
 
-"ExaFMM: a high-performance fast multipole method library with C++ and Python interfaces", Tingyu Wang, Rio Yokota, Lorena A. Barba. The Journal of Open Source Software, 6(61):3145 (2021). doi:10.21105/joss.03145 
+"exafmm: a high-performance fast multipole method library with C++ and Python interfaces", Tingyu Wang, Rio Yokota, Lorena A. Barba. The Journal of Open Source Software, 6(61):3145 (2021). doi:10.21105/joss.03145 
 
 **exafmm-t** is a kernel-independent fast multipole method library for solving N-body problems.
 It provides both C++ and Python APIs.

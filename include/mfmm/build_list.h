@@ -1,28 +1,29 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_BUILD_LIST_H_
-#define INCLUDE_EXAFMM_BUILD_LIST_H_
+#ifndef INCLUDE_MFMM_BUILD_LIST_H_
+#define INCLUDE_MFMM_BUILD_LIST_H_
 
 #include <queue>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "exafmm.h"
 #include "fmm.h"
 #include "geometry.h"
+#include "mfmm.h"
 #include "octree_location.h"
 
-namespace ExaFMM {
+namespace mfmm {
 
 /** Generate the mapping from Morton keys to node indices in the tree.
  * @param nodes Tree.
@@ -237,5 +238,5 @@ void build_list(Nodes<typename FmmT::potential_t>& nodes, const FmmT& fmm) {
     build_other_list(node, nodes, fmm, leaf_keys, key2id);
   }
 }
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_BUILD_LIST_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_BUILD_LIST_H_

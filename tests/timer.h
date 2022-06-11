@@ -1,16 +1,17 @@
 #pragma once
 /******************************************************************************
  *
- * ExaFMM
- * A high-performance fast multipole method library with C++ and
- * python interfaces.
+ * mfmm
+ * A high-performance fast multipole method library using C++.
  *
- * Originally Tingyu Wang, Rio Yokota and Lorena A. Barba
- * Modified by HJA Bird
+ * A fork of ExaFMM (BSD-3-Clause lisence).
+ * Originally copyright Wang, Yokota and Barba.
+ *
+ * Modifications copyright HJA Bird.
  *
  ******************************************************************************/
-#ifndef INCLUDE_EXAFMM_TIMER_H_
-#define INCLUDE_EXAFMM_TIMER_H_
+#ifndef INCLUDE_MFMM_TIMER_H_
+#define INCLUDE_MFMM_TIMER_H_
 
 #include <atomic>
 #include <chrono>
@@ -19,7 +20,7 @@
 #include <map>
 #include <string>
 
-namespace ExaFMM {
+namespace mfmm {
 
 static const int stringLength = 20;  //!< Length of formatted string
 static const int decimal = 7;        //!< Decimal precision
@@ -85,5 +86,5 @@ std::chrono::duration<double> stop(std::string event, bool verbose = true) {
   if (verbose) print(event, eventTime);
   return eventTime;
 }
-}  // namespace ExaFMM
-#endif  // INCLUDE_EXAFMM_TIMER_H_
+}  // namespace mfmm
+#endif  // INCLUDE_MFMM_TIMER_H_
